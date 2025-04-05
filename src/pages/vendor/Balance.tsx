@@ -1,6 +1,9 @@
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Minus } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -27,14 +30,95 @@ export default function VendorBalance() {
             <div className="text-muted-foreground">Current Balance</div>
           </div>
           <div className="flex gap-4">
-            <Button className="flex-1 md:flex-none">
-              <Plus className="mr-2 h-4 w-4" />
-              Deposit
-            </Button>
-            <Button variant="destructive" className="flex-1 md:flex-none">
-              <Minus className="mr-2 h-4 w-4" />
-              Withdraw
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button className="flex-1 md:flex-none">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Deposit
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">Deposit to Account</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Choose deposit method and amount
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="deposit-method">Method</Label>
+                      <Input
+                        id="deposit-method"
+                        defaultValue="M-Pesa"
+                        className="col-span-2"
+                        disabled
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="amount">Amount</Label>
+                      <Input
+                        id="amount"
+                        placeholder="Enter amount"
+                        className="col-span-2"
+                        type="number"
+                      />
+                    </div>
+                  </div>
+                  <Button className="w-full">Proceed to Deposit</Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="destructive" className="flex-1 md:flex-none">
+                  <Minus className="mr-2 h-4 w-4" />
+                  Withdraw
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">Withdraw Funds</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Enter withdrawal details
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="withdraw-to">Withdraw to</Label>
+                      <Input
+                        id="withdraw-to"
+                        defaultValue="M-Pesa"
+                        className="col-span-2"
+                        disabled
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="phone">Phone</Label>
+                      <Input
+                        id="phone"
+                        placeholder="+254 7XX XXX XXX"
+                        className="col-span-2"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="amount">Amount</Label>
+                      <Input
+                        id="amount"
+                        placeholder="Enter amount"
+                        className="col-span-2"
+                        type="number"
+                      />
+                    </div>
+                  </div>
+                  <Button variant="destructive" className="w-full">
+                    Withdraw Now
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </Card>

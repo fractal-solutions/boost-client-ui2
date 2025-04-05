@@ -38,7 +38,7 @@ export function NavigationMenuDemo() {
   };
 
   return (
-    <div className="sticky top-0 z-50 w-full border-b bg-background">
+    <div className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container mx-auto px-2 sm:px-4 py-2 flex justify-between items-center">
         <NavigationMenu className="relative w-full">
           <NavigationMenuList className="flex justify-start gap-0 sm:gap-1">
@@ -274,7 +274,7 @@ function ListItem({
           )}
         >
           <div className="text-sm font-medium leading-none">{title}</div>
-          <p className="line-clamp-2 text-sm leading-snug text-muted-foreground hidden md:block">
+          <p className="line-clamp-2 text-sm leading-snug text-muted-foreground mt-1">
             {description}
           </p>
         </Link>
