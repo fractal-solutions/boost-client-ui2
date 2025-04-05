@@ -11,14 +11,18 @@ import ContractsTemplates from '@/pages/contracts/Templates';
 import InvestmentsMarket from '@/pages/investments/Market';
 import InvestmentsPortfolio from '@/pages/investments/Portfolio';
 import InvestmentsCalculator from '@/pages/investments/Calculator';
+import VendorDashboard from '@/pages/vendor/Dashboard';
+import VendorPOS from '@/pages/vendor/POS';
+import VendorBalance from '@/pages/vendor/Balance';
+import VendorAnalytics from '@/pages/vendor/Analytics';
 
 function App() {
   return (
     <BrowserRouter>
       <ThemeProvider defaultTheme="dark" storageKey="payment-theme">
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen w-full bg-background flex flex-col">
           <NavigationMenuDemo />
-          <main className="container mx-auto px-4 py-8">
+          <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/history" element={<History />} />
@@ -29,6 +33,10 @@ function App() {
               <Route path="/investments/market" element={<InvestmentsMarket />} />
               <Route path="/investments/portfolio" element={<InvestmentsPortfolio />} />
               <Route path="/investments/calculator" element={<InvestmentsCalculator />} />
+              <Route path="/vendor" element={<VendorDashboard />} />
+              <Route path="/vendor/pos" element={<VendorPOS />} />
+              <Route path="/vendor/balance" element={<VendorBalance />} />
+              <Route path="/vendor/analytics" element={<VendorAnalytics />} />
             </Routes>
           </main>
           <Toaster />

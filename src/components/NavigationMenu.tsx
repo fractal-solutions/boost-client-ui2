@@ -5,18 +5,49 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
   NavigationMenuTrigger,
+  NavigationMenuViewport,
 } from '@/components/ui/navigation-menu';
 import { ModeToggle } from '@/components/mode-toggle';
 import { cn } from '@/lib/utils';
-import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User } from 'lucide-react';
+import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function NavigationMenuDemo() {
   return (
-    <div className="sticky top-0 z-50 border-b bg-background">
+    <div className="sticky top-0 z-50 w-full border-b bg-background">
       <div className="container mx-auto px-4 py-2 flex justify-between items-center">
-        <NavigationMenu className="w-full md:w-auto">
-          <NavigationMenuList className="flex justify-start -gap-1">
+        <NavigationMenu className="relative w-full md:w-auto">
+          <NavigationMenuList className="flex justify-start gap-1">
+            <NavigationMenuItem>
+              <NavigationMenuTrigger>
+                <Store className="mr-2 h-4 w-4" />
+                <span className="hidden md:inline">Vendor</span>
+              </NavigationMenuTrigger>
+              <NavigationMenuContent>
+                <ul className="grid w-full gap-3 p-4 md:w-[500px] md:grid-cols-2">
+                  <ListItem 
+                    href="/vendor" 
+                    title="Dashboard"
+                    description="Combined vendor management view"
+                  />
+                  <ListItem 
+                    href="/vendor/pos" 
+                    title="Quick POS"
+                    description="Generate QR codes for payments"
+                  />
+                  <ListItem 
+                    href="/vendor/balance" 
+                    title="Balance"
+                    description="View account balance and transactions"
+                  />
+                  <ListItem 
+                    href="/vendor/analytics" 
+                    title="Analytics"
+                    description="View business transaction analytics"
+                  />
+                </ul>
+              </NavigationMenuContent>
+            </NavigationMenuItem>
             <NavigationMenuItem>
               <NavigationMenuTrigger>
                 <Wallet className="mr-2 h-4 w-4" />
@@ -103,6 +134,9 @@ export function NavigationMenuDemo() {
               </NavigationMenuContent>
             </NavigationMenuItem>
           </NavigationMenuList>
+          <div className="perspective-[2000px] absolute top-full left-0 flex w-full justify-start">
+            <NavigationMenuViewport className="relative mt-1.5 h-[var(--radix-navigation-menu-viewport-height)] w-full origin-[top_center] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 md:w-[var(--radix-navigation-menu-viewport-width)]" />
+          </div>
         </NavigationMenu>
         <div className="flex items-center gap-4">
           <Bell className="h-4 w-4 cursor-pointer" />

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +22,80 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calculator, TrendingUp } from 'lucide-react';
 
+interface CalculatorState {
+  initialInvestment: number;
+  monthlyContribution: number;
+  years: number;
+  expectedReturn: number;
+  riskLevel: string;
+}
+
 export default function InvestmentsCalculator() {
+  const [state, setState] = useState<CalculatorState>({
+    initialInvestment: 100000,
+    monthlyContribution: 10000,
+    years: 5,
+    expectedReturn: 8,
+    riskLevel: 'moderate',
+  });
+
+  const [results, setResults] = useState({
+    totalInvestment: 0,
+    expectedValue: 0,
+    totalReturns: 0,
+    returnRate: 0,
+    yearlyData: [] as Array<{
+      year: number;
+      investment: number;
+      returns: number;
+      balance: number;
+    }>,
+  });
+
+  useEffect(() => {
+    calculateReturns();
+  }, [state]);
+
+  const calculateReturns = () => {
+    const yearlyData = [];
+    let totalInvestment = state.initialInvestment;
+    let currentBalance = state.initialInvestment;
+    const monthlyRate = state.expectedReturn / 100 / 12;
+    const currentYear = new Date().getFullYear();
+
+    for (let year = 1; year <= state.years; year++) {
+      let yearlyReturns = 0;
+
+      // Calculate monthly compounding
+      for (let month = 1; month <= 12; month++) {
+        currentBalance += state.monthlyContribution;
+        const monthlyReturn = currentBalance * monthlyRate;
+        currentBalance += monthlyReturn;
+        yearlyReturns += monthlyReturn;
+      }
+
+      totalInvestment += state.monthlyContribution * 12;
+
+      yearlyData.push({
+        year: currentYear + year - 1,
+        investment: totalInvestment,
+        returns: yearlyReturns,
+        balance: currentBalance,
+      });
+    }
+
+    const totalReturns = currentBalance - totalInvestment;
+    const returnRate = (totalReturns / totalInvestment) * 100;
+
+    setResults({
+      totalInvestment,
+      expectedValue: currentBalance,
+      totalReturns,
+      returnRate,
+      yearlyData,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -33,43 +107,57 @@ export default function InvestmentsCalculator() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Initial Investment (KES)</Label>
-                <Input type="number" placeholder="Enter amount" defaultValue="100000" />
+                <Input
+                  type="number"
+                  value={state.initialInvestment}
+                  onChange={(e) =>
+                    setState({ ...state, initialInvestment: Number(e.target.value) })
+                  }
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Monthly Contribution (KES)</Label>
-                <Input type="number" placeholder="Enter amount" defaultValue="10000" />
+                <Input
+                  type="number"
+                  value={state.monthlyContribution}
+                  onChange={(e) =>
+                    setState({ ...state, monthlyContribution: Number(e.target.value) })
+                  }
+                />
               </div>
 
               <div className="space-y-2">
-                <Label>Investment Period (Years)</Label>
+                <Label>Investment Period (Years): {state.years} years</Label>
                 <div className="pt-2">
                   <Slider
-                    defaultValue={[5]}
+                    value={[state.years]}
+                    onValueChange={(value) => setState({ ...state, years: value[0] })}
                     max={30}
                     min={1}
                     step={1}
                   />
                   <div className="flex justify-between mt-1">
                     <span className="text-sm text-muted-foreground">1 year</span>
-                    <span className="text-sm font-medium">5 years</span>
                     <span className="text-sm text-muted-foreground">30 years</span>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Expected Annual Return (%)</Label>
+                <Label>Expected Annual Return: {state.expectedReturn}%</Label>
                 <div className="pt-2">
                   <Slider
-                    defaultValue={[8]}
+                    value={[state.expectedReturn]}
+                    onValueChange={(value) =>
+                      setState({ ...state, expectedReturn: value[0] })
+                    }
                     max={20}
                     min={1}
                     step={0.5}
                   />
                   <div className="flex justify-between mt-1">
                     <span className="text-sm text-muted-foreground">1%</span>
-                    <span className="text-sm font-medium">8%</span>
                     <span className="text-sm text-muted-foreground">20%</span>
                   </div>
                 </div>
@@ -77,7 +165,10 @@ export default function InvestmentsCalculator() {
 
               <div className="space-y-2">
                 <Label>Risk Level</Label>
-                <Select defaultValue="moderate">
+                <Select
+                  value={state.riskLevel}
+                  onValueChange={(value) => setState({ ...state, riskLevel: value })}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -89,7 +180,10 @@ export default function InvestmentsCalculator() {
                 </Select>
               </div>
 
-              <Button className="w-full bg-gradient-to-r from-primary to-primary/80">
+              <Button
+                className="w-full bg-gradient-to-r from-primary to-primary/80"
+                onClick={calculateReturns}
+              >
                 <Calculator className="mr-2 h-4 w-4" />
                 Calculate Returns
               </Button>
@@ -105,19 +199,25 @@ export default function InvestmentsCalculator() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Total Investment</p>
-                <p className="text-2xl font-bold">KES 700,000</p>
+                <p className="text-2xl font-bold">
+                  KES {results.totalInvestment.toLocaleString()}
+                </p>
               </div>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Expected Value</p>
-                <p className="text-2xl font-bold text-green-500">KES 892,345</p>
+                <p className="text-2xl font-bold text-green-500">
+                  KES {results.expectedValue.toLocaleString()}
+                </p>
               </div>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Total Returns</p>
-                <p className="text-2xl font-bold text-green-500">KES 192,345</p>
+                <p className="text-2xl font-bold text-green-500">
+                  KES {results.totalReturns.toLocaleString()}
+                </p>
               </div>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Return Rate</p>
-                <p className="text-2xl font-bold">27.5%</p>
+                <p className="text-2xl font-bold">{results.returnRate.toFixed(1)}%</p>
               </div>
             </div>
 
@@ -132,14 +232,14 @@ export default function InvestmentsCalculator() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Array.from({ length: 5 }).map((_, i) => (
+                  {results.yearlyData.map((year, i) => (
                     <TableRow key={i}>
-                      <TableCell>{2024 + i}</TableCell>
-                      <TableCell>KES {(100000 + i * 120000).toLocaleString()}</TableCell>
+                      <TableCell>{year.year}</TableCell>
+                      <TableCell>KES {year.investment.toLocaleString()}</TableCell>
                       <TableCell className="text-green-500">
-                        +KES {(8000 + i * 12000).toLocaleString()}
+                        +KES {year.returns.toLocaleString()}
                       </TableCell>
-                      <TableCell>KES {(108000 + i * 140000).toLocaleString()}</TableCell>
+                      <TableCell>KES {year.balance.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
