@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ModeToggle } from '@/components/mode-toggle';
 import { cn } from '@/lib/utils';
-import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store } from 'lucide-react';
+import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store, Scale } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function NavigationMenuDemo() {
@@ -27,9 +27,10 @@ export function NavigationMenuDemo() {
     payments: true,
     contracts: true,
     investments: true,
+    credit: true,
   });
 
-  const toggleVisibility = (menu: 'vendor' | 'payments' | 'contracts' | 'investments') => {
+  const toggleVisibility = (menu: 'vendor' | 'payments' | 'contracts' | 'investments' | 'credit') => {
     setMenuVisibility(prev => ({
       ...prev,
       [menu]: !prev[menu],
@@ -162,6 +163,33 @@ export function NavigationMenuDemo() {
                 </NavigationMenuContent>
               </NavigationMenuItem>
             )}
+            {menuVisibility.credit && (
+              <NavigationMenuItem className="flex-1 sm:flex-none">
+                <NavigationMenuTrigger className="w-full sm:w-auto px-2 sm:px-4">
+                  <Scale className="h-4 w-4" />
+                  <span className="hidden md:inline ml-2">Credit</span>
+                </NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <ul className="grid w-[calc(100vw-1rem)] sm:w-full gap-2 p-2 sm:p-4 md:w-[500px] md:grid-cols-2">
+                    <ListItem
+                      href="/credit/underwriting"
+                      title="Underwriting"
+                      description="Apply for credit and view origination status"
+                    />
+                    <ListItem
+                      href="/credit/status"
+                      title="Credit Status"
+                      description="View credit scores and FICO report"
+                    />
+                    <ListItem
+                      href="/credit/loans"
+                      title="Loans"
+                      description="Manage loans and repayments"
+                    />
+                  </ul>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+            )}
           </NavigationMenuList>
           <div className="absolute left-0 top-full w-screen">
             <NavigationMenuViewport
@@ -171,8 +199,8 @@ export function NavigationMenuDemo() {
         </NavigationMenu>
         <div className="flex items-center gap-2 sm:gap-4">
           <DropdownMenu>
-            <DropdownMenuTrigger>
-              <Settings className="h-4 w-4 cursor-pointer" />
+            <DropdownMenuTrigger className='bg-white dark:bg-black'>
+              <Settings className="h-4 w-4 cursor-pointer bg-white dark:bg-black" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Menu Visibility</DropdownMenuLabel>
@@ -201,10 +229,16 @@ export function NavigationMenuDemo() {
               >
                 Investments Menu
               </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={menuVisibility.credit}
+                onCheckedChange={() => toggleVisibility('credit')}
+              >
+                Credit Menu
+              </DropdownMenuCheckboxItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Bell className="h-4 w-4 cursor-pointer" />
-          <User className="h-4 w-4 cursor-pointer" />
+          <Bell className="h-4 w-4 cursor-pointer text-foreground" />
+          <User className="h-4 w-4 cursor-pointer text-foreground" />
           <ModeToggle />
         </div>
       </div>

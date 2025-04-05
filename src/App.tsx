@@ -15,6 +15,9 @@ import VendorDashboard from '@/pages/vendor/Dashboard';
 import VendorPOS from '@/pages/vendor/POS';
 import VendorBalance from '@/pages/vendor/Balance';
 import VendorAnalytics from '@/pages/vendor/Analytics';
+import CreditUnderwriting from '@/pages/credit/Underwriting';
+import CreditStatus from '@/pages/credit/Status';
+import CreditLoans from '@/pages/credit/Loans';
 
 function App() {
   return (
@@ -37,6 +40,9 @@ function App() {
               <Route path="/vendor/pos" element={<VendorPOS />} />
               <Route path="/vendor/balance" element={<VendorBalance />} />
               <Route path="/vendor/analytics" element={<VendorAnalytics />} />
+              <Route path="/credit/underwriting" element={<CreditUnderwriting />} />
+              <Route path="/credit/status" element={<CreditStatus />} />
+              <Route path="/credit/loans" element={<CreditLoans />} />
             </Routes>
           </main>
           <Toaster />
