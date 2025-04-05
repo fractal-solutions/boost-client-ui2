@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card } from '@/components/ui/card';
+import { Card, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { QrCode } from 'lucide-react';
@@ -15,8 +15,8 @@ export default function VendorPOS() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold tracking-tight">Quick POS</h2>
       <Card className="p-6">
+        <CardTitle className="text-lg font-medium pb-8">Quick POS</CardTitle>
         <div className="space-y-4">
           <div className="flex gap-4">
             <Input

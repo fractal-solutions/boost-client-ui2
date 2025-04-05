@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Card } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   BarChart,
@@ -9,10 +9,21 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Label,
 } from 'recharts';
 
 export default function VendorAnalytics() {
   const [timeframe, setTimeframe] = useState<'day' | 'week'>('day');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const hourlyData = Array.from({ length: 24 }).map((_, i) => {
     const hour = i < 10 ? `0${i}` : `${i}`;
@@ -70,7 +81,7 @@ export default function VendorAnalytics() {
       default:
         throw new Error(`Unexpected hour: ${hour}`);
     }
-    return { time: `${hour}PM`, amount };
+    return { time: `${hour}:00`, amount };
   });
 
   const weeklyData = [
@@ -85,36 +96,54 @@ export default function VendorAnalytics() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">Transaction Analytics</h2>
-        <div className="space-x-2">
-          <Button 
-            variant={timeframe === 'day' ? 'default' : 'outline'}
-            onClick={() => setTimeframe('day')}
-          >
-            Today
-          </Button>
-          <Button 
-            variant={timeframe === 'week' ? 'default' : 'outline'}
-            onClick={() => setTimeframe('week')}
-          >
-            This Week
-          </Button>
+      <Card className="pt-4 px-2 sm:pt-8 sm:-pl-8 sm:pr-16">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 sm:pb-8">
+          <CardTitle className="text-lg font-medium pt-0 pl-4 sm:pl-16 mb-4 sm:mb-0">
+            Transaction Analytics
+          </CardTitle>
+          <div className="space-x-2 w-full sm:w-auto px-4 flex justify-end">
+            <Button 
+              variant={timeframe === 'day' ? 'default' : 'outline'}
+              onClick={() => setTimeframe('day')}
+              className="flex-1 sm:flex-none"
+            >
+              Today
+            </Button>
+            <Button 
+              variant={timeframe === 'week' ? 'default' : 'outline'}
+              onClick={() => setTimeframe('week')}
+              className="flex-1 sm:flex-none"
+            >
+              This Week
+            </Button>
+          </div>
         </div>
-      </div>
-      
-      <Card className="p-3 -pl-8 pr-8">
         <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={timeframe === 'day' ? hourlyData : weeklyData}>
+          <BarChart 
+            data={timeframe === 'day' ? hourlyData : weeklyData}
+            margin={{ left: isMobile ? 10 : 30, right: 10, bottom: 20, top: 10 }}
+          >
             <XAxis 
               dataKey="time" 
-              axisLine={false}
+              axisLine={true}
               tickLine={false}
-            />
+            >
+              <Label
+                value={timeframe === 'day' ? 'Time of Day' : 'Day of Week'}
+                position="bottom"
+                offset={0}
+                style={{ 
+                  textAnchor: 'middle',
+                  fill: 'hsl(var(--muted-foreground))',
+                  fontSize: 14
+                }}
+              />
+            </XAxis>
             <YAxis 
               axisLine={false}
               tickLine={false}
-              tickFormatter={(value) => `${value}`}
+              tickFormatter={(value) => isMobile ? '' : `${value}`}
+              width={isMobile ? 20 : 40}
             />
             <Tooltip 
               cursor={false}
@@ -127,7 +156,7 @@ export default function VendorAnalytics() {
             <Bar 
               dataKey="amount" 
               radius={[7, 7, 0, 0]}
-              fill="aqua"
+              fill="green"
             >
               <defs>
                 <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">

@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowUpRight, QrCode, Fingerprint, Search } from 'lucide-react';
+import { ArrowUpRight, QrCode, Fingerprint, Search, Plus, Minus } from 'lucide-react';
 
 const recentTransactions = [
   {
@@ -101,6 +101,54 @@ export default function Dashboard() {
                   <Fingerprint className="mr-2 h-4 w-4" />
                   Bio Auth
                 </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-medium">Deposit Money</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Button className="h-24 text-lg">
+                  <Plus className="mr-2 h-5 w-5" />
+                  M-Pesa
+                </Button>
+                <Button className="h-24 text-lg" variant="outline">
+                  <Plus className="mr-2 h-5 w-5" />
+                  Bank Transfer
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Instant deposits available via M-Pesa. Bank transfers may take 1-3 business days.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-medium">Withdraw Funds</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Button className="h-24 text-lg" variant="destructive">
+                  <Minus className="mr-2 h-5 w-5" />
+                  To M-Pesa
+                </Button>
+                <Button className="h-24 text-lg" variant="outline">
+                  <Minus className="mr-2 h-5 w-5" />
+                  To Bank
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                M-Pesa withdrawals are instant. Bank withdrawals processed within 24 hours.
               </div>
             </div>
           </CardContent>

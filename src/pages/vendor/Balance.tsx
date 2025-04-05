@@ -1,4 +1,6 @@
-import { Card } from '@/components/ui/card';
+import { Card, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Plus, Minus } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -17,10 +19,24 @@ export default function VendorBalance() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold tracking-tight">Account Balance</h2>
       <Card className="p-6">
-        <div className="text-2xl font-bold mb-2">KES 1,234.56</div>
-        <div className="text-muted-foreground">Current Balance</div>
+        <CardTitle className="text-lg font-medium pb-4">Account Balance</CardTitle>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <div className="text-2xl font-bold mb-2">KES 1,234.56</div>
+            <div className="text-muted-foreground">Current Balance</div>
+          </div>
+          <div className="flex gap-4">
+            <Button className="flex-1 md:flex-none">
+              <Plus className="mr-2 h-4 w-4" />
+              Deposit
+            </Button>
+            <Button variant="destructive" className="flex-1 md:flex-none">
+              <Minus className="mr-2 h-4 w-4" />
+              Withdraw
+            </Button>
+          </div>
+        </div>
       </Card>
       
       <h3 className="text-xl font-semibold mt-8">Recent Transactions</h3>
