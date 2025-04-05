@@ -118,7 +118,7 @@ export default function VendorAnalytics() {
             </Button>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer width="100%" height={280}>
           <BarChart 
             data={timeframe === 'day' ? hourlyData : weeklyData}
             margin={{ left: isMobile ? 10 : 30, right: 10, bottom: 20, top: 10 }}

@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ModeToggle } from '@/components/mode-toggle';
 import { cn } from '@/lib/utils';
-import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store, Scale } from 'lucide-react';
+import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store, Scale, Home } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function NavigationMenuDemo() {
@@ -198,6 +198,12 @@ export function NavigationMenuDemo() {
           </div>
         </NavigationMenu>
         <div className="flex items-center gap-2 sm:gap-4">
+          <Link 
+            to="/home"
+            className="flex items-center justify-center rounded-md hover:bg-accent"
+          >
+            <Home className="h-4 w-4 text-foreground" />
+          </Link>
           <DropdownMenu>
             <DropdownMenuTrigger className='bg-white dark:bg-black'>
               <Settings className="h-4 w-4 cursor-pointer bg-white dark:bg-black" />
@@ -237,8 +243,8 @@ export function NavigationMenuDemo() {
               </DropdownMenuCheckboxItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Bell className="h-4 w-4 cursor-pointer text-foreground" />
-          <User className="h-4 w-4 cursor-pointer text-foreground" />
+          {/* <Bell className="h-4 w-4 cursor-pointer text-foreground" /> */}
+          {/* <User className="h-4 w-4 cursor-pointer text-foreground" /> */}
           <ModeToggle />
         </div>
       </div>

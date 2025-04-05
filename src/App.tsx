@@ -2,6 +2,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { BrowserRouter, Routes, Route, Router } from 'react-router-dom';
 import { NavigationMenuDemo } from '@/components/NavigationMenu';
+import Home from '@/pages/Home'; 
 import Dashboard from '@/pages/Dashboard';
 import History from '@/pages/History';
 import Scheduled from '@/pages/Scheduled';
@@ -28,6 +29,7 @@ function App() {
           <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/history" element={<History />} />
               <Route path="/scheduled" element={<Scheduled />} />
               <Route path="/contracts/create" element={<ContractsCreate />} />
