@@ -75,7 +75,7 @@ export default function Home() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Welcome Back</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Welcome to Boost</h1>
         <p className="text-muted-foreground">Quick access to your favorite features</p>
       </div>
 
