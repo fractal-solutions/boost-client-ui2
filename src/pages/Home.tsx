@@ -1,5 +1,7 @@
 import { Card } from "@/components/ui/card";
+import { WobbleCard } from "@/components/ui/wobble-card";
 import { Button } from "@/components/ui/button";
+import { Vortex } from "@/components/ui/vortex";
 import { Link } from "react-router-dom";
 import { 
   Send, 
@@ -79,11 +81,11 @@ export default function Home() {
         <p className="text-muted-foreground">Quick access to your favorite features</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {shortcuts.map((shortcut) => (
           <Link to={shortcut.href} key={shortcut.title}>
-            <Card className="hover:bg-accent transition-colors">
-              <div className="p-6 flex flex-col items-start space-y-4">
+            <WobbleCard className="bg-gray-800 hover:bg-accent transition-colors">
+              <div className="p-6 flex flex-col items-start space-y-2">
                 <div className={`p-2 rounded-md ${shortcut.color}`}>
                   {shortcut.icon}
                 </div>
@@ -94,7 +96,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-            </Card>
+            </WobbleCard>
           </Link>
         ))}
       </div>
