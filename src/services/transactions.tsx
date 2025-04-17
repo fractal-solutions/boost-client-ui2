@@ -8,7 +8,7 @@ function formatPublicKey(key: string) {
 }
 
 // Helper function to strip public key formatting
-function stripPublicKey(key: string) {
+export function stripPublicKey(key: string) {
     return key
         .replace('-----BEGIN PUBLIC KEY-----\n', '')
         .replace('\n-----END PUBLIC KEY-----', '')

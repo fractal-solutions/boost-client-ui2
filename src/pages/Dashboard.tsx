@@ -23,7 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCallback, useEffect, useState } from 'react';
-import { makeDeposit, makeWithdrawal, sendTransaction } from '@/services/transactions';
+import { makeDeposit, makeWithdrawal, sendTransaction, stripPublicKey } from '@/services/transactions';
 import { lookupUserByPhone, lookupUserByUsername } from '@/services/users';
 import { getBalance } from '@/services/balance';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1113,9 +1113,9 @@ export default function Dashboard() {
                             ) : transactionType === 'WITHDRAW' ? (
                               'Withdrawn from wallet'
                             ) : tx.type === 'SENT' ? (
-                              `Sent to ${tx.counterparty?.slice(0, 8)}...`
+                              `Sent to ${stripPublicKey(tx.counterparty ?? '').slice(0, 64)}...`
                             ) : (
-                              `Received from ${tx.counterparty?.slice(0, 8)}...`
+                              `Received from ${stripPublicKey(tx.counterparty ?? '').slice(0, 64)}...`
                             )}
                           </div>
                         </div>

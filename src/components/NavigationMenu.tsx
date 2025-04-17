@@ -55,7 +55,8 @@ export function NavigationMenuDemo() {
     code: '',
     username: '',
     password: '',
-    isPhoneVerified: false
+    isPhoneVerified: false,
+    role: 'USER' // Add default role
   });
 
   // Add new state for private key dialog
@@ -451,6 +452,50 @@ export function NavigationMenuDemo() {
                     value={registrationData.password}
                     onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })}
                   />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="role">Account Type</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      variant={registrationData.role === 'USER' ? 'default' : 'outline'}
+                      className={cn(
+                        "w-full",
+                        registrationData.role === 'USER' && "border-primary bg-primary/10"
+                      )}
+                      onClick={() => setRegistrationData({ ...registrationData, role: 'USER' })}
+                    >
+                      <User className="h-4 w-4 mr-2" />
+                      User
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={registrationData.role === 'VENDOR' ? 'default' : 'outline'}
+                      className={cn(
+                        "w-full",
+                        registrationData.role === 'VENDOR' && "border-primary bg-primary/10"
+                      )}
+                      onClick={() => setRegistrationData({ ...registrationData, role: 'VENDOR' })}
+                    >
+                      <Store className="h-4 w-4 mr-2" />
+                      Vendor
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={registrationData.role === 'ADMIN' ? 'default' : 'outline'}
+                      className={cn(
+                        "w-full",
+                        registrationData.role === 'ADMIN' && "border-primary bg-primary/10"
+                      )}
+                      onClick={() => setRegistrationData({ ...registrationData, role: 'ADMIN' })}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Admin
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select your account type to determine access level
+                  </p>
                 </div>
                 <Button onClick={handleRegister}>
                   Complete Registration
