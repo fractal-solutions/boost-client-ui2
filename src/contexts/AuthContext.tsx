@@ -14,7 +14,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (phoneNumber: string, password: string) => Promise<void>;
   logout: () => void;
-  register: (data: RegisterData) => Promise<void>;
+  register: (data: RegisterData) => Promise<RegisterResponse>;
   verifyPhone: (phoneNumber: string) => Promise<void>;
   confirmPhone: (phoneNumber: string, code: string) => Promise<boolean>;
 }
@@ -26,11 +26,39 @@ interface RegisterData {
   isPhoneVerified: boolean;
 }
 
+interface RegisterResponse {
+  success: boolean;
+  message: string;
+  data: {
+    id: string;
+    username: string;
+    phoneNumber: string;
+    publicKey: string;
+    privateKey: string;
+    token: string;
+  };
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    // Initialize from localStorage
+    const savedUser = localStorage.getItem('auth_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    return localStorage.getItem('auth_token');
+  });
+
+  // Update localStorage when user changes
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('auth_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('auth_user');
+    }
+  }, [user]);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('auth_token');
@@ -68,16 +96,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const data = await response.json();
-      if (data.success) {
-        setUser(data.user);
-        setToken(data.token);
-        localStorage.setItem('auth_token', data.token);
-        toast.success('Logged in successfully');
-      } else {
-        throw new Error(data.error);
+      if (!data.success) {
+        throw new Error(data.message || 'Login failed');
       }
+
+      setUser(data.user);
+      setToken(data.token);
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
+      toast.success('Logged in successfully');
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || 'Login failed');
       throw error;
     }
   };
@@ -86,6 +115,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setToken(null);
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('private_key_active');
+    localStorage.removeItem('auth_user');
     toast.success('Logged out successfully');
   };
 
@@ -99,8 +130,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const result = await response.json();
       if (result.success) {
-        toast.success('Registration successful');
-        await login(data.phoneNumber, data.password);
+        // Don't auto-login, wait for private key to be saved
+        return result as RegisterResponse;
       } else {
         throw new Error(result.error);
       }

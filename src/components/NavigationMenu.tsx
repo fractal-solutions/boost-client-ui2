@@ -24,9 +24,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store, Scale, Home, LogIn, LogOut, UserPlus } from 'lucide-react';
+import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store, Scale, Home, LogIn, LogOut, UserPlus, Copy, Download, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Copy } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 
@@ -58,6 +57,22 @@ export function NavigationMenuDemo() {
     password: '',
     isPhoneVerified: false
   });
+
+  // Add new state for private key dialog
+  const [showPrivateKeyDialog, setShowPrivateKeyDialog] = useState(false);
+  const [privateKey, setPrivateKey] = useState('');
+
+  // Modify the register function to handle the private key
+  const handleRegister = async () => {
+    try {
+      const result = await register(registrationData);
+      // Store private key temporarily
+      setPrivateKey(result.data.privateKey);
+      setShowPrivateKeyDialog(true);
+      setIsRegisterOpen(false);
+      setRegistrationStep(1);
+    } catch {}
+  };
 
   return (
     <div className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -267,32 +282,38 @@ export function NavigationMenuDemo() {
               <DropdownMenuSeparator />
               <DropdownMenuLabel>User Settings</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {isAuthenticated ? (
+              {isAuthenticated && user ? (
                   <>
                     <div className="px-2 py-2 flex items-start gap-3">
                       <Avatar className="h-10 w-10">
                         <AvatarFallback>
-                          {user?.username?.slice(0, 2).toUpperCase()}
+                          {user.username ? user.username.slice(0, 2).toUpperCase() : ''}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium leading-none">@{user?.username}</p>
-                        <p className="text-xs text-muted-foreground">{user?.phoneNumber}</p>
+                        <p className="text-sm font-medium leading-none">
+                          {user.username ? `@${user.username}` : 'Loading...'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {user.phoneNumber || 'Loading...'}
+                        </p>
                         <div className="flex items-center gap-2 mt-1">
                           <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] text-xs font-mono">
-                            {truncateKey(user?.publicKey || '')}
+                            {user.publicKey ? truncateKey(user.publicKey) : 'Loading...'}
                           </code>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-4 w-4 p-0"
-                            onClick={() => {
-                              navigator.clipboard.writeText(user?.publicKey || '');
-                              toast.success('Public key copied to clipboard');
-                            }}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
+                          {user.publicKey && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-4 w-4 p-0"
+                              onClick={() => {
+                                navigator.clipboard.writeText(user.publicKey);
+                                toast.success('Public key copied to clipboard');
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -431,17 +452,96 @@ export function NavigationMenuDemo() {
                     onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })}
                   />
                 </div>
-                <Button onClick={async () => {
-                  try {
-                    await register(registrationData);
-                    setIsRegisterOpen(false);
-                    setRegistrationStep(1);
-                  } catch {}
-                }}>
+                <Button onClick={handleRegister}>
                   Complete Registration
                 </Button>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Private Key Dialog */}
+        <Dialog open={showPrivateKeyDialog} onOpenChange={setShowPrivateKeyDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-center">Save Your Private Key</DialogTitle>
+              <div className="text-center text-muted-foreground text-sm">
+                This is your only chance to save your private key. You will not be able to recover it if lost.
+              </div>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-muted rounded-lg flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <code className="text-sm font-mono">{formatLongKey(privateKey)}</code>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(privateKey);
+                      toast.success('Full private key copied to clipboard');
+                    }}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Showing truncated key. Use copy or download for full key.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(privateKey);
+                    toast.success('Full private key copied to clipboard');
+                  }}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy Full Key
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => {
+                    const blob = new Blob([privateKey], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'boost-private-key.txt';
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    toast.success('Full private key downloaded');
+                  }}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download Key
+                </Button>
+              </div>
+              <div className="border rounded-lg p-4 bg-yellow-500/10 border-yellow-500/20">
+                <div className="flex gap-2 items-start">
+                  <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-yellow-500">
+                    <p className="font-semibold">Important:</p>
+                    <ul className="list-disc pl-4 mt-1 space-y-1">
+                      <li>Store this key in a secure location</li>
+                      <li>Never share it with anyone</li>
+                      <li>Required for account recovery</li>
+                      <li>Cannot be recovered if lost</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                className="w-full"
+                onClick={() => {
+                  setShowPrivateKeyDialog(false);
+                  setPrivateKey('');
+                }}
+              >
+                I've Saved My Private Key
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -480,9 +580,28 @@ function ListItem({
   );
 }
 
+// function truncateKey(key: string) {
+//   if (!key) return '';
+//   const keyParts = key.split('-----');
+//   const keyBody = keyParts[2].trim();
+//   return `${keyBody.slice(0, 6)}...${keyBody.slice(-4)}`;
+// }
+
 function truncateKey(key: string) {
   if (!key) return '';
   const keyParts = key.split('-----');
+  if (keyParts.length < 3) return key.slice(0, 6) + '...' + key.slice(-4);
   const keyBody = keyParts[2].trim();
   return `${keyBody.slice(0, 6)}...${keyBody.slice(-4)}`;
+}
+
+function formatLongKey(key: string) {
+  if (!key) return '';
+  // Remove header and footer if present
+  const cleanKey = key
+    .replace('-----BEGIN PRIVATE KEY-----\n', '')
+    .replace('\n-----END PRIVATE KEY-----', '')
+    .trim();
+  // Show first 8 and last 8 characters
+  return `${cleanKey.slice(0, 8)}...${cleanKey.slice(-8)}`;
 }

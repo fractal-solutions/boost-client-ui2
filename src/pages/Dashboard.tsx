@@ -18,35 +18,62 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowUpRight, QrCode, Fingerprint, Search, Plus, Minus } from 'lucide-react';
+import { ArrowUpRight, QrCode, Fingerprint, Search, Plus, Minus, Upload, RefreshCcw, Eye, Phone, User, AtSign, DollarSign } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { makeDeposit, makeWithdrawal, sendTransaction } from '@/services/transactions';
+import { lookupUserByPhone, lookupUserByUsername } from '@/services/users';
+import { getBalance } from '@/services/balance';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { formatDistanceToNow } from 'date-fns';
+import { cn } from '@/lib/utils';
 
-const recentTransactions = [
-  {
-    id: 1,
-    recipient: 'John Doe',
-    amount: 'KES 25,000',
-    date: '2024-03-20',
-    status: 'completed',
-  },
-  {
-    id: 2,
-    recipient: 'Jane Smith',
-    amount: 'KES 100,000',
-    date: '2024-03-19',
-    status: 'pending',
-  },
-  {
-    id: 3,
-    recipient: 'Alice Johnson',
-    amount: 'KES 50,000',
-    date: '2024-03-18',
-    status: 'completed',
-  },
-];
+const TRANSACTION_FEE_PERCENTAGE = 0.01; // 1% fee
+const PERCENTAGE_TOLERANCE = 0.001; // 0.1% tolerance for rounding errors
+
+
+interface Transaction {
+  type: 'SENT' | 'RECEIVED';
+  amount: number;
+  fee?: number; // Add this field
+  counterparty: string | null;
+  timestamp: number;
+  blockHeight: number;
+  relatedTxId?: string; // Add this to link fee transactions
+}
+
+interface AccountStats {
+  balance: number;
+  totalSent: number;
+  totalReceived: number;
+  transactionCount: number;
+  lastSeen: number | null;
+}
+
+const readPrivateKeyFile = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const cleanKey = content
+          .replace('-----BEGIN PRIVATE KEY-----\n', '')
+          .replace('\n-----END PRIVATE KEY-----', '')
+          .trim();
+        resolve(content);
+      } catch (error) {
+        reject(new Error('Invalid private key file'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsText(file);
+  });
+};
 
 const quickContacts = [
   { id: 1, name: 'John Doe', phone: '+254 712 345 678' },
@@ -54,28 +81,444 @@ const quickContacts = [
   { id: 3, name: 'Alice Johnson', phone: '+254 734 567 890' },
 ];
 
+const quickAmounts = [
+  { value: "100", label: "KES 100" },
+  { value: "500", label: "KES 500" },
+  { value: "1000", label: "KES 1,000" },
+  { value: "5000", label: "KES 5,000" },
+];
+
+
+
+const defaultStats: AccountStats = {
+  balance: 0,
+  totalSent: 0,
+  totalReceived: 0,
+  transactionCount: 0,
+  lastSeen: null
+};
+
 export default function Dashboard() {
+  const { user, token } = useAuth();
   const [amount, setAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [showPrivateKeyInput, setShowPrivateKeyInput] = useState(false);
+  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [accountStats, setAccountStats] = useState<AccountStats>(defaultStats);
+  const [showStats, setShowStats] = useState(false);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  const [recipientType, setRecipientType] = useState<'phone' | 'username'>('phone');
+  const [recipientId, setRecipientId] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [recipientDetails, setRecipientDetails] = useState<{
+    publicKey: string;
+    username?: string;
+    phoneNumber?: string;
+  } | null>(null);
+  const [isPrivateKeyActive, setIsPrivateKeyActive] = useState<boolean>(() => {
+    // Initialize from localStorage
+    return localStorage.getItem('private_key_active') === 'true';
+  });
+  const [privateKey, setPrivateKey] = useState<string>(() => {
+    // Initialize from localStorage
+    return localStorage.getItem('private_key') || '';
+  });
+
+
+
+  const fetchBalance = useCallback(async () => {
+    if (!user?.publicKey || !token) return;
+
+    try {
+      setIsLoadingBalance(true);
+      
+      const [balanceResponse, statsResponse] = await Promise.all([
+        fetch('http://localhost:2224/balance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: user.publicKey })
+        }),
+        fetch('http://localhost:2224/stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: user.publicKey })
+        })
+      ]);
+
+      const balanceData = await balanceResponse.json();
+      const statsData = await statsResponse.json();
+
+      setBalance(balanceData.balance);
+      setAccountStats(statsData);
+      setLastUpdate(new Date());
+    } catch (error: any) {
+      toast.error('Failed to fetch account data');
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, [user?.publicKey, token]);
+
+  const fetchRecentTransactions = useCallback(async () => {
+    if (!user?.publicKey || !token) return;
+
+    try {
+      setIsLoadingTransactions(true);
+      const response = await fetch('http://localhost:2224/last-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          address: user.publicKey,
+          limit: 10 
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch transactions');
+      }
+
+      const data = await response.json();
+      setRecentTransactions(data.transactions);
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+      toast.error('Failed to load recent transactions');
+    } finally {
+      setIsLoadingTransactions(false);
+    }
+  }, [user?.publicKey, token]);
+
+  useEffect(() => {
+    fetchBalance();
+    fetchRecentTransactions();
+  }, [fetchBalance, fetchRecentTransactions]);
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const updateAfterTransaction = () => {
+      timeoutId = setTimeout(() => {
+        fetchBalance();
+      }, 30000);
+    };
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [fetchBalance, balance]);
+
+  useEffect(() => {
+    if (!user || !token) {
+      setPrivateKey('');
+      setIsPrivateKeyActive(false);
+    }
+  }, [user, token]);
+
+  useEffect(() => {
+    if (isPrivateKeyActive && privateKey) {
+      localStorage.setItem('private_key_active', 'true');
+      localStorage.setItem('private_key', privateKey);
+    } else {
+      localStorage.removeItem('private_key_active');
+      localStorage.removeItem('private_key');
+    }
+  }, [isPrivateKeyActive, privateKey]);
+
+  useEffect(() => {
+    if (!user || !token) {
+      setPrivateKey('');
+      setIsPrivateKeyActive(false);
+      localStorage.removeItem('private_key_active');
+      localStorage.removeItem('private_key');
+    }
+  }, [user, token]);
+  
+  const handleDeposit = async (amount: string) => {
+    try {
+      if (!user?.publicKey || !token) {
+        throw new Error('Please login first');
+      }
+
+      const numAmount = parseFloat(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+
+      toast.info(await makeDeposit(user.publicKey, numAmount, token));
+      setAmount('');
+      fetchBalance();
+    } catch (error: any) {
+      toast.error(error.message || 'Deposit failed');
+    }
+  };
+
+  const handleWithdraw = async (amount: string, method: 'mpesa' | 'bank') => {
+    try {
+      if (!user?.publicKey || !token) {
+        throw new Error('Please login first');
+      }
+
+      const numAmount = parseFloat(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+
+      if (!privateKey) {
+        throw new Error('Please provide your private key');
+      }
+
+      const result = await makeWithdrawal(
+        user.publicKey,
+        privateKey,
+        numAmount,
+        token
+      );
+
+      toast.info(result);
+      setAmount('');
+      setPrivateKey('');
+      setWithdrawDialogOpen(false);
+      fetchBalance();
+    } catch (error: any) {
+      toast.error(error.message || 'Withdrawal failed');
+    }
+  };
+
+  const handleSendMoney = async () => {
+    try {
+      if (!user?.publicKey || !token) {
+        throw new Error('Please login first');
+      }
+  
+      const numAmount = parseFloat(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+  
+      if (!recipientId) {
+        throw new Error('Please enter recipient details');
+      }
+  
+      // Lookup recipient's public key
+      const recipientData = recipientType === 'phone' 
+        ? await lookupUserByPhone(recipientId)
+        : await lookupUserByUsername(recipientId);
+  
+      setRecipientDetails(recipientData);
+      setShowConfirmation(true);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to verify recipient');
+    }
+  };
+
+  const handleConfirmedSend = async () => {
+    try {
+      if (!recipientDetails) return;
+  
+      const numAmount = parseFloat(amount);
+      const result = await sendTransaction(
+        user!.publicKey,
+        privateKey,
+        recipientDetails.publicKey,
+        numAmount,
+        token!
+      );
+  
+      toast.info(result);
+      setAmount('');
+      setRecipientId('');
+      setShowConfirmation(false);
+      setRecipientDetails(null);
+      fetchBalance();
+    } catch (error: any) {
+      toast.error(error.message || 'Transaction failed');
+    }
+  };
+
+  const PrivateKeyActivation = () => (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button 
+            variant="outline" 
+            className="w-full sm:w-auto"
+            size="sm"
+          >
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "h-2 w-2 rounded-full",
+                isPrivateKeyActive ? "bg-green-500" : "bg-red-500"
+              )} />
+              <span>Private Key {isPrivateKeyActive ? 'Active' : 'Inactive'}</span>
+            </div>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80">
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <h4 className="font-medium leading-none">Activate Private Key</h4>
+              <p className="text-sm text-muted-foreground">
+                Upload or paste your private key to enable transactions
+              </p>
+            </div>
+            <div className="grid gap-2">
+            <Textarea
+              placeholder="Enter your private key"
+              value={privateKey}
+              onChange={(e) => {
+                setPrivateKey(e.target.value);
+                const isActive = !!e.target.value;
+                setIsPrivateKeyActive(isActive);
+              }}
+              className="font-mono text-xs"
+              rows={4}
+            />
+              <div className="relative">
+                <Input
+                  type="file"
+                  accept=".txt"
+                  className="hidden"
+                  id="quick-pay-key-file"
+                  onChange={async (e) => {
+                    try {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      
+                      const key = await readPrivateKeyFile(file);
+                      setPrivateKey(key);
+                      setIsPrivateKeyActive(true);
+                      toast.success('Private key activated');
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to load private key');
+                      setIsPrivateKeyActive(false);
+                    }
+                  }}
+                />
+                <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => document.getElementById('quick-pay-key-file')?.click()}
+                >
+                <Upload className="mr-2 h-4 w-4" />
+                Upload Key File
+              </Button>
+            </div>
+          </div>
+          {isPrivateKeyActive && (
+            <Button 
+              variant="destructive" 
+              size="sm"
+              onClick={() => {
+                setPrivateKey('');
+                setIsPrivateKeyActive(false);
+                localStorage.removeItem('private_key_active');
+                localStorage.removeItem('private_key');
+                toast.success('Private key deactivated');
+              }}
+            >
+              Deactivate Key
+            </Button>
+          )}
+        </div>
+        </PopoverContent>
+      </Popover>
+    );
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20">
+        <Card
+          className={cn(
+            "bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20",
+            isLoadingBalance && "opacity-70"
+          )}
+        >
           <CardHeader>
-            <CardTitle className="text-lg font-medium">Available Balance</CardTitle>
+            <CardTitle className="text-lg font-medium flex items-center justify-between">
+              Available Balance
+              <div className="flex items-center gap-2">
+                {user?.publicKey && token && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => setShowStats(!showStats)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={fetchBalance}
+                  disabled={isLoadingBalance || !user?.publicKey || !token}
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold">KES 1,234,567</div>
-            <Badge className="mt-2" variant="secondary">
-              Updated just now
-            </Badge>
+            <div className="space-y-4">
+              <div>
+                <div className="text-4xl font-bold">
+                  {isLoadingBalance ? (
+                    <span className="animate-pulse">Loading...</span>
+                  ) : (
+                    `KES ${balance?.toLocaleString() ?? '0'}`
+                  )}
+                </div>
+                <Badge className="mt-2" variant="secondary">
+                  {lastUpdate
+                    ? `Updated ${formatDistanceToNow(lastUpdate, { addSuffix: true })}`
+                    : 'Not updated yet'}
+                </Badge>
+              </div>
+
+              {user?.publicKey && token && showStats && (
+                <div className="pt-4 border-t border-border/50 space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Total Sent</div>
+                      <div className="font-medium">
+                        KES {accountStats?.totalSent?.toLocaleString() ?? '0'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Total Received</div>
+                      <div className="font-medium">
+                        KES {accountStats?.totalReceived?.toLocaleString() ?? '0'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Transactions</div>
+                      <div className="font-medium">
+                        {accountStats?.transactionCount ?? 0}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Last Activity</div>
+                      <div className="font-medium">
+                        {accountStats?.lastSeen 
+                          ? formatDistanceToNow(accountStats.lastSeen, { addSuffix: true })
+                          : 'Never'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
         <Card className="col-span-1 md:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg font-medium">Quick Pay</CardTitle>
+            <PrivateKeyActivation />
           </CardHeader>
           <CardContent>
             <div className="flex flex-col sm:flex-row gap-4">
@@ -111,29 +554,129 @@ export default function Dashboard() {
                           Enter recipient details and amount
                         </p>
                       </div>
-                      <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4">
-                          <Label htmlFor="phone">Phone</Label>
-                          <Input
-                            id="phone"
-                            className="col-span-2"
-                            placeholder="+254 7XX XXX XXX"
-                            value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value)}
-                          />
+                      {!showConfirmation ? (
+                        <div className="grid gap-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div
+                              className={cn(
+                                "p-4 rounded-lg border-2 cursor-pointer transition-colors text-center",
+                                recipientType === 'phone' 
+                                  ? "border-primary bg-primary/10" 
+                                  : "border-muted hover:border-primary/50"
+                              )}
+                              onClick={() => setRecipientType('phone')}
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <Phone className="h-6 w-6" />
+                                <span className="text-sm font-medium">Phone Number</span>
+                              </div>
+                            </div>
+                            <div
+                              className={cn(
+                                "p-4 rounded-lg border-2 cursor-pointer transition-colors text-center",
+                                recipientType === 'username' 
+                                  ? "border-primary bg-primary/10" 
+                                  : "border-muted hover:border-primary/50"
+                              )}
+                              onClick={() => setRecipientType('username')}
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <User className="h-6 w-6" />
+                                <span className="text-sm font-medium">Username</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <Input
+                                id="recipient"
+                                placeholder={recipientType === 'phone' 
+                                  ? "+254 7XX XXX XXX" 
+                                  : "@username"
+                                }
+                                value={recipientId}
+                                onChange={(e) => setRecipientId(e.target.value)}
+                                className="pl-8"
+                              />
+                              {recipientType === 'phone' ? (
+                                <Phone className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
+                              ) : (
+                                <AtSign className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="relative">
+                              <Input
+                                id="amount"
+                                placeholder="Enter KES"
+                                type="number"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                className="pl-8"
+                              />
+                              <DollarSign className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
+                            </div>
+                          </div>
+                          <Button 
+                            className="w-full"
+                            onClick={handleSendMoney}
+                          >
+                            Verify Recipient
+                          </Button>
                         </div>
-                        <div className="grid grid-cols-3 items-center gap-4">
-                          <Label htmlFor="amount">Amount</Label>
-                          <Input
-                            id="amount"
-                            className="col-span-2"
-                            placeholder="Enter amount"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                          />
+                      ) : (
+                        <div className="grid gap-4">
+                          <div className="p-4 rounded-lg border bg-muted/50">
+                            <div className="space-y-3">
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Recipient</span>
+                                  <div className="text-right">
+                                    {recipientDetails?.username && (
+                                      <div className="font-medium">@{recipientDetails.username}</div>
+                                    )}
+                                    {recipientDetails?.phoneNumber && (
+                                      <div className="text-sm text-muted-foreground">
+                                        {recipientDetails.phoneNumber}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Amount</span>
+                                <span className="font-medium">KES {parseFloat(amount).toLocaleString()}</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground border-t pt-2 mt-2">
+                                <div className="flex items-center gap-1">
+                                  <span>Public Key:</span>
+                                  <code className="font-mono bg-muted px-1 rounded">
+                                    {recipientDetails?.publicKey.slice(0, 16)}...
+                                  </code>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => {
+                                setShowConfirmation(false);
+                                setRecipientDetails(null);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button 
+                              className="flex-1"
+                              onClick={handleConfirmedSend}
+                              disabled={!isPrivateKeyActive}
+                            >
+                              {isPrivateKeyActive ? 'Confirm Send' : 'Activate Private Key to Send'}
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <Button className="w-full">Proceed to Send</Button>
+                      )}
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -212,6 +755,18 @@ export default function Dashboard() {
                           Enter amount to deposit
                         </p>
                       </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {quickAmounts.map((amt) => (
+                          <Button 
+                            key={amt.value}
+                            variant="outline" 
+                            onClick={() => setAmount(amt.value)}
+                            className={amount === amt.value ? "border-primary" : ""}
+                          >
+                            {amt.label}
+                          </Button>
+                        ))}
+                      </div>
                       <div className="grid gap-2">
                         <div className="grid grid-cols-3 items-center gap-4">
                           <Label htmlFor="deposit-amount">Amount</Label>
@@ -220,10 +775,17 @@ export default function Dashboard() {
                             className="col-span-2"
                             placeholder="Enter amount"
                             type="number"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
                           />
                         </div>
                       </div>
-                      <Button className="w-full">Generate Payment Request</Button>
+                      <Button 
+                        className="w-full"
+                        onClick={() => handleDeposit(amount)}
+                      >
+                        Process Deposit
+                      </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -291,15 +853,19 @@ export default function Dashboard() {
                           Enter withdrawal details
                         </p>
                       </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {quickAmounts.map((amt) => (
+                          <Button 
+                            key={amt.value}
+                            variant="outline" 
+                            onClick={() => setAmount(amt.value)}
+                            className={amount === amt.value ? "border-destructive" : ""}
+                          >
+                            {amt.label}
+                          </Button>
+                        ))}
+                      </div>
                       <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4">
-                          <Label htmlFor="withdraw-phone">Phone</Label>
-                          <Input
-                            id="withdraw-phone"
-                            className="col-span-2"
-                            placeholder="+254 7XX XXX XXX"
-                          />
-                        </div>
                         <div className="grid grid-cols-3 items-center gap-4">
                           <Label htmlFor="withdraw-amount">Amount</Label>
                           <Input
@@ -307,10 +873,18 @@ export default function Dashboard() {
                             className="col-span-2"
                             placeholder="Enter amount"
                             type="number"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
                           />
                         </div>
                       </div>
-                      <Button className="w-full" variant="destructive">Withdraw Now</Button>
+                      <Button 
+                        className="w-full" 
+                        variant="destructive"
+                        onClick={() => setWithdrawDialogOpen(true)}
+                      >
+                        Process Withdrawal
+                      </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -370,42 +944,221 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      <Dialog open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Withdrawal</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Please enter your private key or upload your key file to authorize this withdrawal
+            </p>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Amount</Label>
+              <div className="text-lg font-medium">KES {amount}</div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="private-key">Private Key</Label>
+              <Textarea
+                id="private-key"
+                placeholder="Enter your private key"
+                value={privateKey}
+                onChange={(e) => setPrivateKey(e.target.value)}
+                className="font-mono text-xs"
+                rows={4}
+              />
+              <div className="relative">
+                <Input
+                  type="file"
+                  accept=".txt"
+                  className="hidden"
+                  id="key-file"
+                  onChange={async (e) => {
+                    try {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      
+                      const key = await readPrivateKeyFile(file);
+                      setPrivateKey(key);
+                      toast.success('Private key loaded successfully');
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to load private key');
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => document.getElementById('key-file')?.click()}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Key File
+                </Button>
+              </div>
+            </div>
+            <Button 
+              variant="destructive"
+              onClick={() => handleWithdraw(amount, 'mpesa')}
+            >
+              Confirm Withdrawal
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg font-medium">Recent Transactions</CardTitle>
+          <CardTitle className="text-lg font-medium flex items-center justify-between">
+            Recent Transactions
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={fetchRecentTransactions}
+              disabled={isLoadingTransactions}
+            >
+              <RefreshCcw className="h-4 w-4" />
+            </Button>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[400px] w-full">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Recipient</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentTransactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell className="font-medium">{transaction.recipient}</TableCell>
-                    <TableCell>{transaction.amount}</TableCell>
-                    <TableCell>{transaction.date}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          transaction.status === 'completed'
-                            ? 'default'
-                            : 'secondary'
-                        }
-                      >
-                        {transaction.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <ScrollArea className="h-[400px] w-full pr-4">
+            <div className="space-y-4">
+              {isLoadingTransactions ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCcw className="h-4 w-4 animate-spin" />
+                  <span className="ml-2">Loading transactions...</span>
+                </div>
+              ) : recentTransactions
+                .reduce((acc, tx) => {
+                  // Group transactions by block height
+                  const blockTransactions = recentTransactions.filter(t => 
+                    t.blockHeight === tx.blockHeight && 
+                    t.type === 'SENT'
+                  );
+              
+                  // If we have multiple transactions in the same block
+                  if (blockTransactions.length === 2) {
+                    const [tx1, tx2] = blockTransactions.sort((a, b) => b.amount - a.amount);
+                    // Larger amount is main transaction, smaller is fee
+                    const mainAmount = tx1.amount;
+                    const feeAmount = tx2.amount;
+                    
+                    // Verify if the smaller amount matches expected fee percentage
+                    const expectedFee = mainAmount * TRANSACTION_FEE_PERCENTAGE;
+                    const expectedFeeWithTolerance = expectedFee * (1 + PERCENTAGE_TOLERANCE);
+                    
+                    if (feeAmount <= expectedFeeWithTolerance && 
+                        feeAmount >= expectedFee * (1 - PERCENTAGE_TOLERANCE)) {
+                      // This is a transaction + fee pair
+                      const existingTx = acc.find(t => t.blockHeight === tx.blockHeight);
+                      if (!existingTx) {
+                        acc.push({
+                          ...tx1,
+                          fee: feeAmount
+                        });
+                      }
+                      return acc;
+                    }
+                  }
+                  
+                  // If not part of a fee transaction pair, add normally
+                  if (!acc.find(t => t.blockHeight === tx.blockHeight)) {
+                    acc.push(tx);
+                  }
+                  return acc;
+                }, [] as Transaction[])
+                .map((tx) => {
+                  const transactionType = tx.type === 'SENT' && !tx.counterparty 
+                    ? 'WITHDRAW'
+                    : tx.type === 'RECEIVED' && !tx.counterparty
+                    ? 'DEPOSIT'
+                    : tx.type;
+              
+                  // Calculate fee percentage if fee exists
+                  const feePercentage = tx.fee ? ((tx.fee / tx.amount) * 100).toFixed(1) : null;
+              
+                  return (
+                    <div
+                      key={tx.blockHeight}
+                      className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="grid grid-cols-5 gap-4">
+                        {/* Main Transaction Details - Takes 3 columns */}
+                        <div className="col-span-3 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={
+                                transactionType === 'DEPOSIT'
+                                  ? 'default'
+                                  : transactionType === 'WITHDRAW'
+                                  ? 'destructive'
+                                  : tx.type === 'SENT'
+                                  ? 'destructive'
+                                  : 'secondary'
+                              }
+                            >
+                              {transactionType}
+                            </Badge>
+                            <span className="text-muted-foreground text-sm">
+                              {formatDistanceToNow(tx.timestamp, { addSuffix: true })}
+                            </span>
+                          </div>
+                          <div className="font-medium text-lg">
+                            KES {tx.amount.toLocaleString()}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {transactionType === 'DEPOSIT' ? (
+                              'Deposited to wallet'
+                            ) : transactionType === 'WITHDRAW' ? (
+                              'Withdrawn from wallet'
+                            ) : tx.type === 'SENT' ? (
+                              `Sent to ${tx.counterparty?.slice(0, 8)}...`
+                            ) : (
+                              `Received from ${tx.counterparty?.slice(0, 8)}...`
+                            )}
+                          </div>
+                        </div>
+              
+                        {/* Fee Details - Takes 2 columns */}
+                        <div className="col-span-2 flex flex-col justify-between border-l pl-4">
+                          <div className="space-y-1">
+                            {tx.fee ? (
+                              <>
+                                <div className="text-sm text-muted-foreground">
+                                  Network Fee ({feePercentage}%)
+                                </div>
+                                <div className="font-medium text-red-500">
+                                  KES {tx.fee.toLocaleString()}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-2">
+                                  Total Amount
+                                  <div className="font-medium text-base">
+                                    KES {(tx.amount + tx.fee).toLocaleString()}
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="text-sm text-muted-foreground italic">
+                                No network fee
+                              </div>
+                            )}
+                          </div>
+                          <div className={cn(
+                            "text-sm font-medium text-right",
+                            transactionType === 'DEPOSIT' || tx.type === 'RECEIVED' 
+                              ? "text-green-500" 
+                              : "text-red-500"
+                          )}>
+                            {transactionType === 'DEPOSIT' || tx.type === 'RECEIVED' ? '+' : '-'}
+                            {(tx.amount + (tx.fee ?? 0)).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
           </ScrollArea>
         </CardContent>
       </Card>
