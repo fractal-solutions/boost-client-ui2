@@ -15,11 +15,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
+  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { ModeToggle } from '@/components/mode-toggle';
+import { useAuth } from '@/contexts/AuthContext';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store, Scale, Home } from 'lucide-react';
+import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store, Scale, Home, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Copy } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { toast } from 'sonner';
 
 export function NavigationMenuDemo() {
   const [menuVisibility, setMenuVisibility] = useState({
@@ -36,6 +45,19 @@ export function NavigationMenuDemo() {
       [menu]: !prev[menu],
     }));
   };
+
+  const { user, isAuthenticated, login, logout, register, verifyPhone, confirmPhone } = useAuth();
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [loginData, setLoginData] = useState({ phoneNumber: '', password: '' });
+  const [registrationStep, setRegistrationStep] = useState(1);
+  const [registrationData, setRegistrationData] = useState({
+    phoneNumber: '',
+    code: '',
+    username: '',
+    password: '',
+    isPhoneVerified: false
+  });
 
   return (
     <div className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -241,12 +263,187 @@ export function NavigationMenuDemo() {
               >
                 Credit Menu
               </DropdownMenuCheckboxItem>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>User Settings</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {isAuthenticated ? (
+                  <>
+                    <div className="px-2 py-2 flex items-start gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback>
+                          {user?.username?.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium leading-none">@{user?.username}</p>
+                        <p className="text-xs text-muted-foreground">{user?.phoneNumber}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] text-xs font-mono">
+                            {truncateKey(user?.publicKey || '')}
+                          </code>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-4 w-4 p-0"
+                            onClick={() => {
+                              navigator.clipboard.writeText(user?.publicKey || '');
+                              toast.success('Public key copied to clipboard');
+                            }}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={logout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Logout</span>
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                <>
+                  <DropdownMenuItem onSelect={() => setIsLoginOpen(true)}>
+                    <LogIn className="mr-2 h-4 w-4" />
+                    <span>Login</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setIsRegisterOpen(true)}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    <span>Register</span>
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           {/* <Bell className="h-4 w-4 cursor-pointer text-foreground" /> */}
           {/* <User className="h-4 w-4 cursor-pointer text-foreground" /> */}
           <ModeToggle />
         </div>
+
+
+        {/* Login Dialog */}
+        <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Login</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  placeholder="+XXX XXXXXXXXX"
+                  value={loginData.phoneNumber}
+                  onChange={(e) => setLoginData({ ...loginData, phoneNumber: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={loginData.password}
+                  onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                />
+              </div>
+              <Button onClick={async () => {
+                try {
+                  await login(loginData.phoneNumber, loginData.password);
+                  setIsLoginOpen(false);
+                } catch {}
+              }}>
+                Login
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Registration Dialog */}
+        <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Register</DialogTitle>
+            </DialogHeader>
+            {registrationStep === 1 && (
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="reg-phone">Phone Number</Label>
+                  <Input
+                    id="reg-phone"
+                    placeholder="+XXX XXXXXXXXX"
+                    value={registrationData.phoneNumber}
+                    onChange={(e) => setRegistrationData({ ...registrationData, phoneNumber: e.target.value })}
+                  />
+                </div>
+                <Button onClick={async () => {
+                  try {
+                    await verifyPhone(registrationData.phoneNumber);
+                    setRegistrationStep(2);
+                  } catch {}
+                }}>
+                  Send Verification Code
+                </Button>
+              </div>
+            )}
+
+            {registrationStep === 2 && (
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="verification-code">Verification Code</Label>
+                  <Input
+                    id="verification-code"
+                    placeholder="Enter 6-digit code"
+                    value={registrationData.code}
+                    onChange={(e) => setRegistrationData({ ...registrationData, code: e.target.value })}
+                  />
+                </div>
+                <Button onClick={async () => {
+                  try {
+                    const verified = await confirmPhone(registrationData.phoneNumber, registrationData.code);
+                    if (verified) {
+                      setRegistrationData({ ...registrationData, isPhoneVerified: true });
+                      setRegistrationStep(3);
+                    }
+                  } catch {}
+                }}>
+                  Verify Code
+                </Button>
+              </div>
+            )}
+
+            {registrationStep === 3 && (
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    value={registrationData.username}
+                    onChange={(e) => setRegistrationData({ ...registrationData, username: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="reg-password">Password</Label>
+                  <Input
+                    id="reg-password"
+                    type="password"
+                    value={registrationData.password}
+                    onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })}
+                  />
+                </div>
+                <Button onClick={async () => {
+                  try {
+                    await register(registrationData);
+                    setIsRegisterOpen(false);
+                    setRegistrationStep(1);
+                  } catch {}
+                }}>
+                  Complete Registration
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -281,4 +478,11 @@ function ListItem({
       </NavigationMenuLink>
     </li>
   );
+}
+
+function truncateKey(key: string) {
+  if (!key) return '';
+  const keyParts = key.split('-----');
+  const keyBody = keyParts[2].trim();
+  return `${keyBody.slice(0, 6)}...${keyBody.slice(-4)}`;
 }

@@ -2,6 +2,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { BrowserRouter, Routes, Route, Router } from 'react-router-dom';
 import { NavigationMenuDemo } from '@/components/NavigationMenu';
+import { AuthProvider } from '@/contexts/AuthContext';
 import Home from '@/pages/Home'; 
 import Dashboard from '@/pages/Dashboard';
 import History from '@/pages/History';
@@ -23,6 +24,7 @@ import CreditLoans from '@/pages/credit/Loans';
 function App() {
   return (
     <BrowserRouter>
+    <AuthProvider>
       <ThemeProvider defaultTheme="dark" storageKey="payment-theme">
         <div className="min-h-screen w-full bg-background flex flex-col">
           <NavigationMenuDemo />
@@ -50,6 +52,7 @@ function App() {
           <Toaster />
         </div>
       </ThemeProvider>
+    </AuthProvider>
     </BrowserRouter>
   );
 }
