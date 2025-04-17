@@ -335,6 +335,7 @@ export default function Dashboard() {
       setRecipientId('');
       setShowConfirmation(false);
       setRecipientDetails(null);
+      setShowSendForm(false);
       fetchBalance();
     } catch (error: any) {
       toast.error(error.message || 'Transaction failed');
