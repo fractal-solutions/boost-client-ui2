@@ -343,7 +343,7 @@ export default function Scheduled() {
                         <div className="space-y-3">
                             {scheduleForm.amount > 0 && (
                             <div className="space-y-2 text-sm">
-                              <h6 className="font-medium">{scheduleForm.title}</h6>
+                              <h5 className="font-medium">{scheduleForm.title}</h5>
                               <div className="flex justify-between">
                               <span className="text-muted-foreground">Payment Amount:</span>
                               <span className="font-medium">KES {scheduleForm.amount.toLocaleString()}</span>

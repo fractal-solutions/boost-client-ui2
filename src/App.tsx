@@ -16,6 +16,7 @@ import InvestmentsCalculator from '@/pages/investments/Calculator';
 import VendorDashboard from '@/pages/vendor/Dashboard';
 import VendorPOS from '@/pages/vendor/POS';
 import VendorBalance from '@/pages/vendor/Balance';
+import VendorInventory from '@/pages/vendor/Inventory';
 import VendorAnalytics from '@/pages/vendor/Analytics';
 import CreditUnderwriting from '@/pages/credit/Underwriting';
 import CreditStatus from '@/pages/credit/Status';
@@ -43,6 +44,7 @@ function App() {
               <Route path="/vendor" element={<VendorDashboard />} />
               <Route path="/vendor/pos" element={<VendorPOS />} />
               <Route path="/vendor/balance" element={<VendorBalance />} />
+              <Route path="/vendor/inventory" element={<VendorInventory />} />
               <Route path="/vendor/analytics" element={<VendorAnalytics />} />
               <Route path="/credit/underwriting" element={<CreditUnderwriting />} />
               <Route path="/credit/status" element={<CreditStatus />} />

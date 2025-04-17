@@ -104,6 +104,11 @@ export function NavigationMenuDemo() {
                       description="View account balance and transactions"
                     />
                     <ListItem
+                      href="/vendor/inventory"
+                      title="Inventory"
+                      description="Manage products and stock levels"
+                    />
+                    <ListItem
                       href="/vendor/analytics"
                       title="Analytics"
                       description="View business transaction analytics"
