@@ -49,6 +49,15 @@ interface ContractFormData {
   };
 }
 
+const formatDate = (dateString: string) => {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
 export default function ContractsCreate() {
   const { user, token } = useAuth();
   const [formData, setFormData] = useState<ContractFormData>({
@@ -122,233 +131,312 @@ export default function ContractsCreate() {
       <div className="flex flex-col md:flex-row gap-6">
         <Card className="flex-1">
           <CardHeader>
-            <CardTitle>Create New Contract</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <FileText className="h-5 w-5 text-primary" />
+              Create New Contract
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-6">
-              {/* Contract Type Selection with Icons */}
+          <CardContent>
+            <div className="grid gap-8">
+              {/* Contract Type Selection */}
               <div className="space-y-4">
-                <Label>Contract Type</Label>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-1 bg-primary rounded-full" />
+                  <Label className="text-lg">Choose Contract Type</Label>
+                </div>
                 <div className="grid grid-cols-3 gap-4">
                   {[
-                    { value: 'RECURRING_PAYMENT', label: 'Recurring', icon: RefreshCw },
-                    { value: 'FIXED_PAYMENT', label: 'One-time', icon: CircleDollarSign },
-                    { value: 'MILESTONE_PAYMENT', label: 'Milestone', icon: Flag }
+                    { value: 'RECURRING_PAYMENT', label: 'Recurring', icon: RefreshCw, description: 'Regular scheduled payments' },
+                    { value: 'FIXED_PAYMENT', label: 'One-time', icon: CircleDollarSign, description: 'Single payment contract' },
+                    { value: 'MILESTONE_PAYMENT', label: 'Milestone', icon: Flag, description: 'Payment based on goals' }
                   ].map((type) => (
                     <Button
                       key={type.value}
                       type="button"
                       variant="outline"
                       className={cn(
-                        "flex flex-col items-center justify-center h-24 gap-2 transition-colors",
+                        "relative flex flex-col items-center justify-center h-32 gap-2 transition-all hover:scale-[1.02]",
+                        "group hover:border-primary/50",
                         formData.type === type.value && [
-                          "border-primary",
+                          "border-primary/50 shadow-lg",
                           "bg-primary/5 dark:bg-primary/10",
-                          "hover:bg-primary/10 dark:hover:bg-primary/15",
                           "[&>svg]:text-primary"
                         ]
                       )}
                       onClick={() => setFormData({ ...formData, type: type.value as ContractFormData['type'] })}
                     >
                       <type.icon className={cn(
-                        "h-6 w-6",
+                        "h-8 w-8 transition-all group-hover:scale-110",
                         formData.type === type.value 
                           ? "text-primary" 
-                          : "text-muted-foreground group-hover:text-primary"
+                          : "text-muted-foreground"
                       )} />
-                      <span className="text-sm">{type.label}</span>
+                      <div className="space-y-1 text-center">
+                        <span className="text-sm font-medium">{type.label}</span>
+                        <p className="text-xs text-muted-foreground hidden md:block">
+                          {type.description}
+                        </p>
+                      </div>
+                      {formData.type === type.value && (
+                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary animate-pulse" />
+                      )}
                     </Button>
                   ))}
                 </div>
               </div>
 
-              {/* Basic Details Section */}
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Contract Title</Label>
-                  <Input 
-                    id="title" 
-                    placeholder="Enter contract title"
-                    value={formData.metadata?.title}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      metadata: { ...formData.metadata, title: e.target.value }
-                    })}
-                  />
+              {/* Contract Details */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-1 bg-primary rounded-full" />
+                  <Label className="text-lg">Contract Details</Label>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Payment Amount (KES)</Label>
-                  <div className="relative">
+                {/* Basic Details Grid */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="title" className="text-sm font-medium">Contract Title</Label>
                     <Input 
-                      id="amount" 
-                      type="number"
-                      placeholder="Enter amount"
-                      value={formData.amount || ''}
+                      id="title" 
+                      placeholder="Enter contract title"
+                      className="transition-all hover:border-primary/50"
+                      value={formData.metadata?.title}
                       onChange={(e) => setFormData({
                         ...formData,
-                        amount: parseFloat(e.target.value)
+                        metadata: { ...formData.metadata, title: e.target.value }
                       })}
-                      className="pl-10"
                     />
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      KES  
-                    </span>
                   </div>
-                </div>
-              </div>
 
-              {/* Interval Selection */}
-              {formData.type === 'RECURRING_PAYMENT' && (
-                <div className="space-y-4">
-                  <Label>Payment Interval</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
+                  <div className="space-y-2">
+                    <Label htmlFor="amount" className="text-sm font-medium">Payment Amount</Label>
+                    <div className="relative">
                       <Input 
+                        id="amount" 
                         type="number"
-                        min="1"
-                        placeholder="Interval"
-                        value={formData.intervalConfig.value}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value);
-                          const newInterval = calculateMilliseconds(value, formData.intervalConfig.unit);
-                          setFormData({
-                            ...formData,
-                            interval: newInterval,
-                            intervalConfig: {
-                              ...formData.intervalConfig,
-                              value
-                            }
-                          });
-                        }}
-                      />
-                    </div>
-                    <Select
-                      value={formData.intervalConfig.unit}
-                      onValueChange={(unit: TimeUnit) => {
-                        const newInterval = calculateMilliseconds(formData.intervalConfig.value, unit);
-                        setFormData({
-                          ...formData,
-                          interval: newInterval,
-                          intervalConfig: {
-                            ...formData.intervalConfig,
-                            unit
-                          }
-                        });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="minutes">Minutes</SelectItem>
-                        <SelectItem value="hours">Hours</SelectItem>
-                        <SelectItem value="days">Days</SelectItem>
-                        <SelectItem value="weeks">Weeks</SelectItem>
-                        <SelectItem value="months">Months</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              )}
-
-              {/* Timeline Section */}
-              <div className="space-y-4">
-                <Label>Contract Timeline</Label>
-                <div className="grid gap-4">
-                  <div className="flex items-center gap-4">
-                    <CalendarIcon className="h-5 w-5 text-muted-foreground" />
-                    <div className="grid flex-1">
-                      <Label htmlFor="endDate" className="text-sm">End Date</Label>
-                      <Input 
-                        id="endDate" 
-                        type="date"
-                        value={formData.endDate}
+                        placeholder="Enter amount"
+                        className="pl-12 transition-all hover:border-primary/50"
+                        value={formData.amount || ''}
                         onChange={(e) => setFormData({
                           ...formData,
-                          endDate: e.target.value
+                          amount: parseFloat(e.target.value)
                         })}
                       />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
+                        KES
+                      </span>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Recipient Section */}
-              <div className="space-y-4">
-                <Label>Recipient Details</Label>
-                <div className="flex items-center gap-4">
-                  <UserIcon className="h-5 w-5 text-muted-foreground" />
-                  <div className="grid flex-1">
+                  {/* Interval Selection for Recurring Payments */}
+                  {formData.type === 'RECURRING_PAYMENT' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Payment Frequency</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input 
+                            type="number"
+                            min="1"
+                            placeholder="Interval"
+                            className="transition-all hover:border-primary/50"
+                            value={formData.intervalConfig.value}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              const newInterval = calculateMilliseconds(value, formData.intervalConfig.unit);
+                              setFormData({
+                                ...formData,
+                                interval: newInterval,
+                                intervalConfig: {
+                                  ...formData.intervalConfig,
+                                  value
+                                }
+                              });
+                            }}
+                          />
+                          <Select
+                            value={formData.intervalConfig.unit}
+                            onValueChange={(unit: TimeUnit) => {
+                              const newInterval = calculateMilliseconds(formData.intervalConfig.value, unit);
+                              setFormData({
+                                ...formData,
+                                interval: newInterval,
+                                intervalConfig: {
+                                  ...formData.intervalConfig,
+                                  unit
+                                }
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="transition-all hover:border-primary/50">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="minutes">Minutes</SelectItem>
+                              <SelectItem value="hours">Hours</SelectItem>
+                              <SelectItem value="days">Days</SelectItem>
+                              <SelectItem value="weeks">Weeks</SelectItem>
+                              <SelectItem value="months">Months</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="endDate" className="text-sm font-medium">End Date</Label>
+                        <Input 
+                          id="endDate" 
+                          type="date"
+                          className="transition-all hover:border-primary/50"
+                          value={formData.endDate}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            endDate: e.target.value
+                          })}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Recipient Section */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Recipient</Label>
+                  <div className="relative">
                     <Input 
                       placeholder="Enter recipient's public key"
+                      className="pl-10 transition-all hover:border-primary/50"
                       value={formData.participants[0] || ''}
                       onChange={(e) => setFormData({
                         ...formData,
                         participants: [e.target.value]
                       })}
                     />
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   </div>
                 </div>
-              </div>
 
-              {/* Description Section */}
-              <div className="space-y-2">
-                <Label htmlFor="description">Contract Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Enter contract details"
-                  className="min-h-[100px]"
-                  value={formData.metadata?.description}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    metadata: { ...formData.metadata, description: e.target.value }
-                  })}
-                />
+                {/* Description Section */}
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-sm font-medium">Description</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Enter contract details and terms"
+                    className="min-h-[120px] transition-all hover:border-primary/50"
+                    value={formData.metadata?.description}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      metadata: { ...formData.metadata, description: e.target.value }
+                    })}
+                  />
+                </div>
               </div>
             </div>
-
-            <Button 
-              className="w-full bg-gradient-to-r from-primary to-primary/80"
-              onClick={handleCreateContract}
-            >
-              Create Contract
-            </Button>
           </CardContent>
         </Card>
 
-        <div className="flex-1 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Templates</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {['Service Agreement', 'Fixed Price Contract', 'Milestone Payment'].map((template) => (
-                <Button
-                  key={template}
-                  variant="outline"
-                  className="w-full justify-start"
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  {template}
-                </Button>
-              ))}
-            </CardContent>
-          </Card>
+        <Card className="flex-1">
+          <CardHeader>
+            <CardTitle>Contract Preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-muted/50 rounded-lg p-6 space-y-6">
+              {!formData.metadata?.title && !formData.amount ? (
+                <div className="text-center text-sm text-muted-foreground">
+                  Start filling in the contract details to see a preview
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <h3 className="font-semibold tracking-tight">
+                        {formData.metadata?.title || 'Untitled Contract'}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {formData.metadata?.description || 'No description provided'}
+                      </p>
+                    </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Contract Preview</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-muted/50 rounded-lg p-4 text-center min-h-[200px] flex items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  Contract preview will appear here
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Contract Type</div>
+                        <div className="font-medium">
+                          {formData.type === 'RECURRING_PAYMENT' && 'Recurring Payment'}
+                          {formData.type === 'FIXED_PAYMENT' && 'One-time Payment'}
+                          {formData.type === 'MILESTONE_PAYMENT' && 'Milestone Payment'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-muted-foreground">Amount</div>
+                        <div className="font-medium">
+                          {formData.amount ? `KES ${formData.amount.toLocaleString()}` : '-'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {formData.type === 'RECURRING_PAYMENT' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Payment Interval</div>
+                          <div className="font-medium">
+                            {formData.intervalConfig.value} {formData.intervalConfig.unit}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-muted-foreground">End Date</div>
+                          <div className="font-medium">
+                            {formatDate(formData.endDate) || '-'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t">
+                      <div className="text-sm text-muted-foreground mb-2">Participants</div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="bg-primary/10 text-primary rounded px-2 py-1">Creator</div>
+                          <code className="text-xs">
+                            {user?.publicKey ? `${user.publicKey.slice(0, 8)}...${user.publicKey.slice(-8)}` : '-'}
+                          </code>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="bg-primary/10 text-primary rounded px-2 py-1">Recipient</div>
+                          <code className="text-xs">
+                            {formData.participants[0] 
+                              ? `${formData.participants[0].slice(0, 8)}...${formData.participants[0].slice(-8)}`
+                              : '-'
+                            }
+                          </code>
+                        </div>
+                      </div>
+                    </div>
+
+                    {formData.type === 'RECURRING_PAYMENT' && (
+                      <div className="bg-primary/5 rounded-lg p-4 mt-4">
+                        <div className="text-sm">
+                          <span className="text-primary font-medium">Payment Schedule: </span>
+                          {`${formData.intervalConfig.value} ${formData.intervalConfig.unit} payments`}
+                          {formData.endDate && ` until ${formatDate(formData.endDate)}`}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div className="mt-6">
+              <Button 
+                className="w-full bg-gradient-to-r from-primary to-primary/80"
+                onClick={handleCreateContract}
+                disabled={!formData.metadata?.title || !formData.amount || !formData.participants[0]}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Create Contract
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

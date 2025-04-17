@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowUpRight, QrCode, Fingerprint, Search, Plus, Minus, Upload, RefreshCcw, Eye, Phone, User, AtSign, DollarSign } from 'lucide-react';
+import { ArrowUpRight, QrCode, Fingerprint, Search, Plus, Minus, Upload, RefreshCcw, Eye, Phone, User, AtSign, DollarSign, X, Camera } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const TRANSACTION_FEE_PERCENTAGE = 0.01; // 1% fee
 const PERCENTAGE_TOLERANCE = 0.001; // 0.1% tolerance for rounding errors
@@ -127,6 +128,9 @@ export default function Dashboard() {
     // Initialize from localStorage
     return localStorage.getItem('private_key') || '';
   });
+  const [showSendForm, setShowSendForm] = useState(false);
+  const [showQRScan, setShowQRScan] = useState(false);
+  const [showBioAuth, setShowBioAuth] = useState(false);
 
 
 
@@ -338,99 +342,110 @@ export default function Dashboard() {
   };
 
   const PrivateKeyActivation = () => (
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button 
-            variant="outline" 
-            className="w-full sm:w-auto"
-            size="sm"
-          >
-            <div className="flex items-center gap-2">
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button 
+          variant="outline" 
+          className="w-full sm:w-auto"
+          size="sm"
+        >
+          <div className="flex items-center gap-2">
+            <div className="relative">
               <div className={cn(
                 "h-2 w-2 rounded-full",
                 isPrivateKeyActive ? "bg-green-500" : "bg-red-500"
               )} />
-              <span>Private Key {isPrivateKeyActive ? 'Active' : 'Inactive'}</span>
+              {isPrivateKeyActive && (
+                <>
+                  <div className="absolute -inset-0.5 rounded-full bg-green-500/30 animate-ping" />
+                  <div className="absolute -inset-1 rounded-full bg-green-500/20 animate-pulse" />
+                </>
+              )}
+              {!isPrivateKeyActive && (
+                <div className="absolute -inset-0.5 rounded-full bg-red-500/30 animate-pulse" />
+              )}
             </div>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80">
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <h4 className="font-medium leading-none">Activate Private Key</h4>
-              <p className="text-sm text-muted-foreground">
-                Upload or paste your private key to enable transactions
-              </p>
-            </div>
-            <div className="grid gap-2">
-            <Textarea
-              placeholder="Enter your private key"
-              value={privateKey}
-              onChange={(e) => {
-                setPrivateKey(e.target.value);
-                const isActive = !!e.target.value;
-                setIsPrivateKeyActive(isActive);
-              }}
-              className="font-mono text-xs"
-              rows={4}
-            />
-              <div className="relative">
-                <Input
-                  type="file"
-                  accept=".txt"
-                  className="hidden"
-                  id="quick-pay-key-file"
-                  onChange={async (e) => {
-                    try {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      
-                      const key = await readPrivateKeyFile(file);
-                      setPrivateKey(key);
-                      setIsPrivateKeyActive(true);
-                      toast.success('Private key activated');
-                    } catch (error: any) {
-                      toast.error(error.message || 'Failed to load private key');
-                      setIsPrivateKeyActive(false);
-                    }
-                  }}
-                />
-                <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => document.getElementById('quick-pay-key-file')?.click()}
-                >
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Key File
-              </Button>
-            </div>
+            <span>Private Key {isPrivateKeyActive ? 'Active' : 'Inactive'}</span>
           </div>
-          {isPrivateKeyActive && (
-            <Button 
-              variant="destructive" 
-              size="sm"
-              onClick={() => {
-                setPrivateKey('');
-                setIsPrivateKeyActive(false);
-                localStorage.removeItem('private_key_active');
-                localStorage.removeItem('private_key');
-                toast.success('Private key deactivated');
-              }}
-            >
-              Deactivate Key
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80">
+        <div className="grid gap-4">
+          <div className="space-y-2">
+            <h4 className="font-medium leading-none">Activate Private Key</h4>
+            <p className="text-sm text-muted-foreground">
+              Upload or paste your private key to enable transactions
+            </p>
+          </div>
+          <div className="grid gap-2">
+          <Textarea
+            placeholder="Enter your private key"
+            value={privateKey}
+            onChange={(e) => {
+              setPrivateKey(e.target.value);
+              const isActive = !!e.target.value;
+              setIsPrivateKeyActive(isActive);
+            }}
+            className="font-mono text-xs"
+            rows={4}
+          />
+            <div className="relative">
+              <Input
+                type="file"
+                accept=".txt"
+                className="hidden"
+                id="quick-pay-key-file"
+                onChange={async (e) => {
+                  try {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    
+                    const key = await readPrivateKeyFile(file);
+                    setPrivateKey(key);
+                    setIsPrivateKeyActive(true);
+                    toast.success('Private key activated');
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to load private key');
+                    setIsPrivateKeyActive(false);
+                  }
+                }}
+              />
+              <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => document.getElementById('quick-pay-key-file')?.click()}
+              >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Key File
             </Button>
-          )}
+          </div>
         </div>
-        </PopoverContent>
-      </Popover>
-    );
+        {isPrivateKeyActive && (
+          <Button 
+            variant="destructive" 
+            size="sm"
+            onClick={() => {
+              setPrivateKey('');
+              setIsPrivateKeyActive(false);
+              localStorage.removeItem('private_key_active');
+              localStorage.removeItem('private_key');
+              toast.success('Private key deactivated');
+            }}
+          >
+            Deactivate Key
+          </Button>
+        )}
+      </div>
+      </PopoverContent>
+    </Popover>
+  );
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card
           className={cn(
-            "bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20",
+            "bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20 h-fit",
             isLoadingBalance && "opacity-70"
           )}
         >
@@ -521,211 +536,313 @@ export default function Dashboard() {
             <PrivateKeyActivation />
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <Command className="rounded-lg border shadow-md">
-                  <CommandInput placeholder="Search recipients by name or phone..." />
-                  <CommandList>
-                    <CommandEmpty>No recipients found.</CommandEmpty>
-                    <CommandGroup heading="Frequent Contacts">
-                      {quickContacts.map((contact) => (
-                        <CommandItem key={contact.id} className="flex justify-between">
-                          <span>{contact.name}</span>
-                          <span className="text-sm text-muted-foreground">{contact.phone}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </div>
-              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary/80">
-                      <ArrowUpRight className="mr-2 h-4 w-4" />
-                      Send Money
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80">
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Send via Boost</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Enter recipient details and amount
-                        </p>
-                      </div>
-                      {!showConfirmation ? (
-                        <div className="grid gap-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div
-                              className={cn(
-                                "p-4 rounded-lg border-2 cursor-pointer transition-colors text-center",
-                                recipientType === 'phone' 
-                                  ? "border-primary bg-primary/10" 
-                                  : "border-muted hover:border-primary/50"
-                              )}
-                              onClick={() => setRecipientType('phone')}
-                            >
-                              <div className="flex flex-col items-center gap-2">
-                                <Phone className="h-6 w-6" />
-                                <span className="text-sm font-medium">Phone Number</span>
-                              </div>
-                            </div>
-                            <div
-                              className={cn(
-                                "p-4 rounded-lg border-2 cursor-pointer transition-colors text-center",
-                                recipientType === 'username' 
-                                  ? "border-primary bg-primary/10" 
-                                  : "border-muted hover:border-primary/50"
-                              )}
-                              onClick={() => setRecipientType('username')}
-                            >
-                              <div className="flex flex-col items-center gap-2">
-                                <User className="h-6 w-6" />
-                                <span className="text-sm font-medium">Username</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="space-y-3">
-                            <div className="relative">
-                              <Input
-                                id="recipient"
-                                placeholder={recipientType === 'phone' 
-                                  ? "+254 7XX XXX XXX" 
-                                  : "@username"
-                                }
-                                value={recipientId}
-                                onChange={(e) => setRecipientId(e.target.value)}
-                                className="pl-8"
-                              />
-                              {recipientType === 'phone' ? (
-                                <Phone className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
-                              ) : (
-                                <AtSign className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
-                              )}
-                            </div>
-                            <div className="relative">
-                              <Input
-                                id="amount"
-                                placeholder="Enter KES"
-                                type="number"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                className="pl-8"
-                              />
-                              <DollarSign className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
-                            </div>
-                          </div>
-                          <Button 
-                            className="w-full"
-                            onClick={handleSendMoney}
-                          >
-                            Verify Recipient
-                          </Button>
-                        </div>
+            <div className="flex flex-col gap-4 w-full">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <Command className="rounded-lg border shadow-md">
+                    <CommandInput placeholder="Search recipients by name or phone..." />
+                    <CommandList>
+                      <CommandEmpty>No recipients found.</CommandEmpty>
+                      <CommandGroup heading="Frequent Contacts">
+                        {quickContacts.map((contact) => (
+                          <CommandItem key={contact.id} className="flex justify-between">
+                            <span>{contact.name}</span>
+                            <span className="text-sm text-muted-foreground">{contact.phone}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </div>
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                  <div className="w-full space-y-4">
+                    <Button 
+                      className="w-full bg-gradient-to-r from-primary to-primary/80"
+                      onClick={() => setShowSendForm(!showSendForm)}
+                    >
+                      {showSendForm ? (
+                        <X className="mr-2 h-4 w-4" />
                       ) : (
-                        <div className="grid gap-4">
-                          <div className="p-4 rounded-lg border bg-muted/50">
-                            <div className="space-y-3">
-                              <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-muted-foreground">Recipient</span>
-                                  <div className="text-right">
-                                    {recipientDetails?.username && (
-                                      <div className="font-medium">@{recipientDetails.username}</div>
-                                    )}
-                                    {recipientDetails?.phoneNumber && (
-                                      <div className="text-sm text-muted-foreground">
-                                        {recipientDetails.phoneNumber}
+                        <ArrowUpRight className="mr-2 h-4 w-4" />
+                      )}
+                      {showSendForm ? 'Cancel' : 'Send Money'}
+                    </Button>
+
+                    <AnimatePresence>
+                      {showSendForm && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-lg font-medium">Send via Boost</CardTitle>
+                              <p className="text-sm text-muted-foreground">
+                                Enter recipient details and amount
+                              </p>
+                            </CardHeader>
+                            <CardContent className="grid gap-6">
+                              {!showConfirmation ? (
+                                <div className="grid gap-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div
+                                      className={cn(
+                                        "p-4 rounded-lg border-2 cursor-pointer transition-colors text-center",
+                                        recipientType === 'phone' 
+                                          ? "border-primary bg-primary/10" 
+                                          : "border-muted hover:border-primary/50"
+                                      )}
+                                      onClick={() => setRecipientType('phone')}
+                                    >
+                                      <div className="flex flex-col items-center gap-2">
+                                        <Phone className="h-6 w-6" />
+                                        <span className="text-sm font-medium">Phone Number</span>
                                       </div>
-                                    )}
+                                    </div>
+                                    <div
+                                      className={cn(
+                                        "p-4 rounded-lg border-2 cursor-pointer transition-colors text-center",
+                                        recipientType === 'username' 
+                                          ? "border-primary bg-primary/10" 
+                                          : "border-muted hover:border-primary/50"
+                                      )}
+                                      onClick={() => setRecipientType('username')}
+                                    >
+                                      <div className="flex flex-col items-center gap-2">
+                                        <User className="h-6 w-6" />
+                                        <span className="text-sm font-medium">Username</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-3">
+                                    <div className="relative">
+                                      <Input
+                                        id="recipient"
+                                        placeholder={recipientType === 'phone' 
+                                          ? "+254 7XX XXX XXX" 
+                                          : "@username"
+                                        }
+                                        value={recipientId}
+                                        onChange={(e) => setRecipientId(e.target.value)}
+                                        className="pl-8"
+                                      />
+                                      {recipientType === 'phone' ? (
+                                        <Phone className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
+                                      ) : (
+                                        <AtSign className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
+                                      )}
+                                    </div>
+                                    <div className="relative">
+                                      <Input
+                                        id="amount"
+                                        placeholder="Enter KES"
+                                        type="number"
+                                        value={amount}
+                                        onChange={(e) => setAmount(e.target.value)}
+                                        className="pl-8"
+                                      />
+                                      <DollarSign className="h-4 w-4 absolute left-2.5 top-3 text-muted-foreground" />
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      variant="outline"
+                                      className="flex-1"
+                                      onClick={() => setShowSendForm(false)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button 
+                                      className="flex-1"
+                                      onClick={handleSendMoney}
+                                    >
+                                      Verify Recipient
+                                    </Button>
                                   </div>
                                 </div>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-muted-foreground">Amount</span>
-                                <span className="font-medium">KES {parseFloat(amount).toLocaleString()}</span>
-                              </div>
-                              <div className="text-xs text-muted-foreground border-t pt-2 mt-2">
-                                <div className="flex items-center gap-1">
-                                  <span>Public Key:</span>
-                                  <code className="font-mono bg-muted px-1 rounded">
-                                    {recipientDetails?.publicKey.slice(0, 16)}...
-                                  </code>
+                              ) : (
+                                <div className="grid gap-4">
+                                  <div className="p-4 rounded-lg border bg-muted/50">
+                                    <div className="space-y-3">
+                                      <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-sm text-muted-foreground">Recipient</span>
+                                          <div className="text-right">
+                                            {recipientDetails?.username && (
+                                              <div className="font-medium">@{recipientDetails.username}</div>
+                                            )}
+                                            {recipientDetails?.phoneNumber && (
+                                              <div className="text-sm text-muted-foreground">
+                                                {recipientDetails.phoneNumber}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">Amount</span>
+                                        <span className="font-medium">KES {parseFloat(amount).toLocaleString()}</span>
+                                      </div>
+                                      <div className="text-xs text-muted-foreground border-t pt-2 mt-2">
+                                        <div className="flex items-center gap-1">
+                                          <span>Public Key:</span>
+                                          <code className="font-mono bg-muted px-1 rounded">
+                                            {recipientDetails?.publicKey.slice(0, 16)}...
+                                          </code>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      className="flex-1"
+                                      onClick={() => {
+                                        setShowConfirmation(false);
+                                        setRecipientDetails(null);
+                                      }}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button 
+                                      className="flex-1"
+                                      onClick={handleConfirmedSend}
+                                      disabled={!isPrivateKeyActive}
+                                    >
+                                      {isPrivateKeyActive ? 'Confirm Send' : 'Activate Private Key to Send'}
+                                    </Button>
+                                  </div>
                                 </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Scanner Section */}
+              <div className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => setShowQRScan(!showQRScan)}
+                >
+                  {showQRScan ? (
+                    <X className="mr-2 h-4 w-4" />
+                  ) : (
+                    <QrCode className="mr-2 h-4 w-4" />
+                  )}
+                  {showQRScan ? 'Close Scanner' : 'Scan QR'}
+                </Button>
+
+                <AnimatePresence>
+                  {showQRScan && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <Card className="mt-4">
+                        <CardHeader>
+                          <CardTitle className="text-lg font-medium">Scan QR Code</CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            Point your camera at a Boost QR code
+                          </p>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="border-2 border-dashed rounded-lg aspect-square flex items-center justify-center bg-muted">
+                              <div className="text-center space-y-2 p-8">
+                                <Camera className="w-12 h-12 mx-auto text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">
+                                  Camera access required for QR scanning
+                                </p>
+                                <Button variant="secondary" size="sm">
+                                  Enable Camera
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="text-sm text-muted-foreground text-center">
+                              You can also upload a QR code image
+                              <div className="mt-2">
+                                <Button variant="outline" size="sm">
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  Upload QR Image
+                                </Button>
                               </div>
                             </div>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              className="flex-1"
-                              onClick={() => {
-                                setShowConfirmation(false);
-                                setRecipientDetails(null);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                            <Button 
-                              className="flex-1"
-                              onClick={handleConfirmedSend}
-                              disabled={!isPrivateKeyActive}
-                            >
-                              {isPrivateKeyActive ? 'Confirm Send' : 'Activate Private Key to Send'}
-                            </Button>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Bio Auth Section */}
+              <div className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => setShowBioAuth(!showBioAuth)}
+                >
+                  {showBioAuth ? (
+                    <X className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Fingerprint className="mr-2 h-4 w-4" />
+                  )}
+                  {showBioAuth ? 'Cancel' : 'Bio Auth'}
+                </Button>
+
+                <AnimatePresence>
+                  {showBioAuth && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <Card className="mt-4">
+                        <CardHeader>
+                          <CardTitle className="text-lg font-medium">Biometric Authentication</CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            Use your device's biometric sensor
+                          </p>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            <div className="border rounded-lg p-8">
+                              <div className="text-center space-y-4">
+                                <Fingerprint className="w-16 h-16 mx-auto text-primary animate-pulse" />
+                                <div className="space-y-2">
+                                  <h3 className="font-medium">Ready to Scan</h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    Place your finger on the sensor
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-sm text-muted-foreground text-center">
+                              <p>Using biometric authentication for secure transactions</p>
+                              <Button variant="link" size="sm" className="mt-2">
+                                Learn more about biometric security
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      <QrCode className="mr-2 h-4 w-4" />
-                      Scan QR
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80">
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Scan QR Code</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Position QR code within the frame
-                        </p>
-                      </div>
-                      <div className="aspect-square w-full bg-muted rounded-lg flex items-center justify-center border-2 border-dashed">
-                        <QrCode className="h-16 w-16 text-muted-foreground" />
-                      </div>
-                      <Button className="w-full">Enable Camera</Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      <Fingerprint className="mr-2 h-4 w-4" />
-                      Bio Auth
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80">
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Biometric Authentication</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Use fingerprint to authenticate payment
-                        </p>
-                      </div>
-                      <div className="flex justify-center py-4">
-                        <Fingerprint className="h-16 w-16 text-muted-foreground animate-pulse" />
-                      </div>
-                      <Button className="w-full">Authenticate Payment</Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </CardContent>
@@ -1075,15 +1192,12 @@ export default function Dashboard() {
                     ? 'DEPOSIT'
                     : tx.type;
               
-                  // Calculate fee percentage if fee exists
-                  const feePercentage = tx.fee ? ((tx.fee / tx.amount) * 100).toFixed(1) : null;
-              
                   return (
                     <div
                       key={tx.blockHeight}
-                      className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      className="p-1 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                     >
-                      <div className="grid grid-cols-5 gap-4">
+                      <div className="grid grid-cols-5 gap-4 scale-90">
                         {/* Main Transaction Details - Takes 3 columns */}
                         <div className="col-span-3 space-y-1">
                           <div className="flex items-center gap-2">
@@ -1113,37 +1227,31 @@ export default function Dashboard() {
                             ) : transactionType === 'WITHDRAW' ? (
                               'Withdrawn from wallet'
                             ) : tx.type === 'SENT' ? (
-                              `Sent to ${stripPublicKey(tx.counterparty ?? '').slice(0, 64)}...`
+                              `Sent to ${stripPublicKey(tx.counterparty ?? '').slice(0, 16)}...`
                             ) : (
-                              `Received from ${stripPublicKey(tx.counterparty ?? '').slice(0, 64)}...`
+                              `Received from ${stripPublicKey(tx.counterparty ?? '').slice(0, 16)}...`
                             )}
                           </div>
                         </div>
-              
-                        {/* Fee Details - Takes 2 columns */}
-                        <div className="col-span-2 flex flex-col justify-between border-l pl-4">
-                          <div className="space-y-1">
-                            {tx.fee ? (
-                              <>
-                                <div className="text-sm text-muted-foreground">
-                                  Network Fee ({feePercentage}%)
+
+                        {/* Amount/Fee Details - Takes 2 columns */}
+                        <div className="col-span-2 flex flex-col justify-between pl-0 lg:pl-4">
+                          {tx.type === 'SENT' && tx.fee ? (
+                            <>
+                              <div className="space-y-1 text-xs scale-80">
+                                <div className="flex justify-between items-center text-muted-foreground">
+                                  <span>Network Fee ({((tx.fee / tx.amount) * 100).toFixed(1)}%)</span>
+                                  <span className="text-red-500">-{tx.fee.toLocaleString()}</span>
                                 </div>
-                                <div className="font-medium text-red-500">
-                                  KES {tx.fee.toLocaleString()}
+                                <div className="flex justify-between items-center pt-1 text-muted-foreground">
+                                  <span>Total</span>
+                                  <span>-{(tx.amount + tx.fee).toLocaleString()}</span>
                                 </div>
-                                <div className="text-xs text-muted-foreground mt-2">
-                                  Total Amount
-                                  <div className="font-medium text-base">
-                                    KES {(tx.amount + tx.fee).toLocaleString()}
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="text-sm text-muted-foreground italic">
-                                No network fee
                               </div>
-                            )}
-                          </div>
+                            </>
+                          ) : (
+                            <div /> // Placeholder for spacing
+                          )}
                           <div className={cn(
                             "text-sm font-medium text-right",
                             transactionType === 'DEPOSIT' || tx.type === 'RECEIVED' 

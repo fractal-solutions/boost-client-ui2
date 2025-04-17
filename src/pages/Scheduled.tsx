@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { AlertCircle, Plus } from 'lucide-react';
+import { AlertCircle, Plus, X, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -23,6 +23,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
+import { AnimatePresence, motion } from "framer-motion";
+
+type TimeUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
+
+interface ScheduleFormData {
+  amount: number;
+  interval: number;
+  intervalConfig: {
+    value: number;
+    unit: TimeUnit;
+  };
+  endDate: string;
+  recipient: string;
+  title: string;
+  description: string;
+}
+
+const calculateMilliseconds = (value: number, unit: TimeUnit): number => {
+  const milliseconds = {
+    minutes: 60 * 1000,
+    hours: 60 * 60 * 1000,
+    days: 24 * 60 * 60 * 1000,
+    weeks: 7 * 24 * 60 * 60 * 1000,
+    months: 30 * 24 * 60 * 60 * 1000
+  };
+  return value * milliseconds[unit];
+};
 
 const scheduledPayments = [
   {
@@ -52,18 +83,99 @@ const scheduledPayments = [
 ];
 
 export default function Scheduled() {
+  const { user, token } = useAuth();
   const [selectedPayment, setSelectedPayment] = useState(null);
+  const [scheduleForm, setScheduleForm] = useState<ScheduleFormData>({
+    amount: 0,
+    interval: 604800000,
+    intervalConfig: {
+      value: 1,
+      unit: 'weeks'
+    },
+    endDate: '',
+    recipient: '',
+    title: '',
+    description: ''
+  });
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+
+  const handleCreateSchedule = async () => {
+    try {
+      if (!user?.publicKey || !token) {
+        throw new Error('Please login first');
+      }
+
+      const response = await fetch('http://localhost:2223/contract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          creator: user.publicKey,
+          participants: [scheduleForm.recipient],
+          amount: scheduleForm.amount,
+          interval: scheduleForm.interval,
+          endDate: new Date(scheduleForm.endDate).getTime(),
+          type: 'RECURRING_PAYMENT',
+          terms: {
+            paymentMethod: 'BOOST'
+          },
+          metadata: {
+            title: scheduleForm.title,
+            description: scheduleForm.description
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to create schedule');
+      }
+
+      toast.success('Payment schedule created successfully');
+      // Reset form or close popover
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create schedule');
+    }
+  };
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row gap-6">
-        <Card className="flex-1">
+        <Card 
+          className="flex-1 cursor-pointer hover:bg-accent/50 transition-colors"
+          onClick={() => setShowCalendar(!showCalendar)}
+        >
           <CardHeader>
-            <CardTitle className="text-lg font-medium">Payment Calendar</CardTitle>
+            <CardTitle className="text-lg font-medium flex items-center justify-between">
+              Payment Calendar
+              {showCalendar ? (
+                <X className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <Calendar mode="single" className="rounded-md border" />
-          </CardContent>
+          <AnimatePresence>
+            {showCalendar && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <CardContent>
+                  <Calendar 
+                    mode="single" 
+                    className="rounded-md border" 
+                  />
+                </CardContent>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Card>
 
         <Card className="flex-1">
@@ -71,57 +183,222 @@ export default function Scheduled() {
             <CardTitle className="text-lg font-medium">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button className="w-full bg-gradient-to-r from-primary to-primary/80">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Schedule New Payment
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80">
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <h4 className="font-medium leading-none">New Scheduled Payment</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Set up a recurring payment
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <div className="grid grid-cols-3 items-center gap-4">
-                      <Label htmlFor="recipient">Recipient</Label>
-                      <Input
-                        id="recipient"
-                        placeholder="Name or phone"
-                        className="col-span-2"
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 items-center gap-4">
-                      <Label htmlFor="amount">Amount</Label>
-                      <Input
-                        id="amount"
-                        placeholder="Enter amount"
-                        type="number"
-                        className="col-span-2"
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 items-center gap-4">
-                      <Label htmlFor="frequency">Frequency</Label>
-                      <Select>
-                        <SelectTrigger className="col-span-2">
-                          <SelectValue placeholder="Select frequency" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <Button className="w-full">Create Schedule</Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <Button 
+              className="w-full bg-gradient-to-r from-primary to-primary/80"
+              onClick={() => setShowScheduleForm(!showScheduleForm)}
+            >
+              {showScheduleForm ? (
+                <X className="mr-2 h-4 w-4" />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" />
+              )}
+              {showScheduleForm ? 'Cancel' : 'Schedule New Payment'}
+            </Button>
+
+            <AnimatePresence>
+              {showScheduleForm && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg font-medium">New Scheduled Payment</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Set up automatic recurring payments
+                      </p>
+                    </CardHeader>
+                    <CardContent className="grid gap-6">
+                      <div className="grid gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="title">Payment Title</Label>
+                          <Input
+                            id="title"
+                            placeholder="e.g. Monthly Rent"
+                            value={scheduleForm.title}
+                            onChange={(e) => setScheduleForm({
+                              ...scheduleForm,
+                              title: e.target.value
+                            })}
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label htmlFor="amount">Amount (KES)</Label>
+                          <div className="relative">
+                            <Input
+                              id="amount"
+                              type="number"
+                              placeholder="Enter amount"
+                              className="pl-12"
+                              value={scheduleForm.amount || ''}
+                              onChange={(e) => setScheduleForm({
+                                ...scheduleForm,
+                                amount: parseFloat(e.target.value)
+                              })}
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
+                              KES
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Payment Frequency</Label>
+                            <div className="flex gap-2">
+                              <Input
+                                type="number"
+                                min="1"
+                                placeholder="Interval"
+                                value={scheduleForm.intervalConfig.value}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value);
+                                  setScheduleForm({
+                                    ...scheduleForm,
+                                    interval: calculateMilliseconds(value, scheduleForm.intervalConfig.unit),
+                                    intervalConfig: {
+                                      ...scheduleForm.intervalConfig,
+                                      value
+                                    }
+                                  });
+                                }}
+                              />
+                              <Select
+                                value={scheduleForm.intervalConfig.unit}
+                                onValueChange={(unit: TimeUnit) => {
+                                  const newInterval = calculateMilliseconds(
+                                    scheduleForm.intervalConfig.value,
+                                    unit
+                                  );
+                                  setScheduleForm({
+                                    ...scheduleForm,
+                                    interval: newInterval,
+                                    intervalConfig: {
+                                      ...scheduleForm.intervalConfig,
+                                      unit
+                                    }
+                                  });
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="minutes">Minutes</SelectItem>
+                                  <SelectItem value="hours">Hours</SelectItem>
+                                  <SelectItem value="days">Days</SelectItem>
+                                  <SelectItem value="weeks">Weeks</SelectItem>
+                                  <SelectItem value="months">Months</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="endDate">End Date</Label>
+                            <Input
+                              id="endDate"
+                              type="date"
+                              value={scheduleForm.endDate}
+                              onChange={(e) => setScheduleForm({
+                                ...scheduleForm,
+                                endDate: e.target.value
+                              })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="recipient">Recipient</Label>
+                          <Input
+                            id="recipient"
+                            placeholder="Enter recipient's public key"
+                            value={scheduleForm.recipient}
+                            onChange={(e) => setScheduleForm({
+                              ...scheduleForm,
+                              recipient: e.target.value
+                            })}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="description">Description (Optional)</Label>
+                          <Textarea
+                            id="description"
+                            placeholder="Add any notes or details"
+                            value={scheduleForm.description}
+                            onChange={(e) => setScheduleForm({
+                              ...scheduleForm,
+                              description: e.target.value
+                            })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <div className="space-y-3">
+                            {scheduleForm.amount > 0 && (
+                            <div className="space-y-2 text-sm">
+                              <h6 className="font-medium">{scheduleForm.title}</h6>
+                              <div className="flex justify-between">
+                              <span className="text-muted-foreground">Payment Amount:</span>
+                              <span className="font-medium">KES {scheduleForm.amount.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between">
+                              <span className="text-muted-foreground">Frequency:</span>
+                              <span className="font-medium">
+                                Every {scheduleForm.intervalConfig.value} {scheduleForm.intervalConfig.unit}
+                              </span>
+                              </div>
+                              {scheduleForm.endDate && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Until:</span>
+                                <span className="font-medium">{new Date(scheduleForm.endDate).toLocaleDateString()}</span>
+                              </div>
+                              )}
+                              {scheduleForm.recipient && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Recipient:</span>
+                                <span className="font-medium">{scheduleForm.recipient}</span>
+                              </div>
+                              )}
+                              {scheduleForm.description && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Description:</span>
+                                <span className="font-medium">{scheduleForm.description}</span>
+                              </div>
+                              )}
+                            </div>
+                            )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4">
+                        <Button 
+                          className="flex-1"
+                          variant="outline"
+                          onClick={() => setShowScheduleForm(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          className="flex-1"
+                          onClick={handleCreateSchedule}
+                          disabled={!scheduleForm.amount || !scheduleForm.recipient}
+                        >
+                          Create Schedule
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="bg-muted/50 rounded-lg p-4 flex items-start space-x-4">
               <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div className="space-y-1">
