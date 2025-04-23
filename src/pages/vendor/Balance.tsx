@@ -293,3 +293,139 @@ export default function VendorBalance() {
     </div>
   );
 }
+
+
+export function OnlyBalance() {
+  const { user, token } = useAuth();
+  const [showBalance, setShowBalance] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [accountStats, setAccountStats] = useState<AccountStats>(defaultStats);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+
+  const fetchBalance = useCallback(async () => {
+    if (!user?.publicKey || !token) return;
+
+    try {
+      setIsLoadingBalance(true);
+      
+      const [balanceResponse, statsResponse] = await Promise.all([
+        fetch('http://localhost:2224/balance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: user.publicKey })
+        }),
+        fetch('http://localhost:2224/stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: user.publicKey })
+        })
+      ]);
+
+      const balanceData = await balanceResponse.json();
+      const statsData = await statsResponse.json();
+
+      setBalance(balanceData.balance);
+      setAccountStats(statsData);
+      setLastUpdate(new Date());
+    } catch (error: any) {
+      toast.error('Failed to fetch account data');
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, [user?.publicKey, token]);
+
+  const fetchRecentTransactions = useCallback(async () => {
+    if (!user?.publicKey || !token) return;
+
+    try {
+      setIsLoadingTransactions(true);
+      const response = await fetch('http://localhost:2224/last-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          address: user.publicKey,
+          limit: 10 
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch transactions');
+      }
+
+      const data = await response.json();
+      setRecentTransactions(data.transactions);
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+      toast.error('Failed to load recent transactions');
+    } finally {
+      setIsLoadingTransactions(false);
+    }
+  }, [user?.publicKey, token]);
+
+  useEffect(() => {
+    fetchBalance();
+    fetchRecentTransactions();
+  }, [fetchBalance, fetchRecentTransactions]);
+
+  return (
+    <Card className={cn(
+      "bg-gradient-to-br from-primary/10 via-primary/5 to-background border-primary/20",
+      isLoadingBalance && "opacity-70"
+    )}>
+      <CardHeader>
+        <CardTitle className="text-lg font-medium flex items-center justify-between">
+          Account Balance
+          <div className="flex items-center gap-2">
+            {user?.publicKey && token && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setShowBalance(!showBalance)}
+                title={showBalance ? "Hide Balance" : "Show Balance"}
+              >
+                <Eye className={cn(
+                  "h-4 w-4 transition-opacity",
+                  !showBalance && "opacity-50"
+                )} />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={fetchBalance}
+              disabled={isLoadingBalance || !user?.publicKey || !token}
+            >
+              <RefreshCcw className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div>
+            <div className={cn(
+              "text-4xl font-bold transition-all duration-200",
+              !showBalance && "blur-md select-none"
+            )}>
+              {isLoadingBalance ? (
+                <span className="animate-pulse">Loading...</span>
+              ) : (
+                `KES ${balance?.toLocaleString() ?? '0'}`
+              )}
+            </div>
+            <Badge className="mt-2" variant="secondary">
+              {lastUpdate
+                ? `Updated ${formatDistanceToNow(lastUpdate, { addSuffix: true })}`
+                : 'Not updated yet'}
+            </Badge>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}

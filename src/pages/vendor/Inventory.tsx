@@ -22,7 +22,10 @@ import {
   FileDown,
   FileUp,
   MoreVertical,
-  ChevronDown
+  ChevronDown,
+  Upload,
+  Users,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -32,17 +35,65 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { InventoryItemDialog } from '@/components/inventory/InventoryItemDialog';
+import { SuppliersDialog } from '@/pages/vendor/SuppliersDialog';
+import { InventoryReportDialog } from '@/components/inventory/InventoryReportDialog';
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contact: string;
+  email: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface StockHistory {
+  id: string;
+  type: 'IN' | 'OUT';
+  quantity: number;
+  date: number;
+  reason: string;
+  purchase?: {
+    cost: number;
+    invoice?: string;
+  };
+  sale?: {
+    price: number;
+    receipt?: string;
+  };
+}
 
 export interface InventoryItem {
   id: string;
   name: string;
   sku: string;
-  price: number;
+  description?: string;
+  imageUrl?: string;
+  purchaseCost: number;
+  sellingPrice: number;
   quantity: number;
   lowStockThreshold: number;
-  category: string;
-  description?: string;
+  supplierId?: string;
+  category?: string;
+  location?: string;
+  barcode?: string;
+  created: number;
+  lastUpdated: number;
+  stockHistory: StockHistory[];
 }
+
+// Add supplier storage functions
+const getSuppliersKey = (publicKey: string) => `suppliers_${publicKey}`;
+
+const saveSuppliers = (publicKey: string, suppliers: Supplier[]) => {
+  localStorage.setItem(getSuppliersKey(publicKey), JSON.stringify(suppliers));
+};
+
+const loadSuppliers = (publicKey: string): Supplier[] => {
+  const stored = localStorage.getItem(getSuppliersKey(publicKey));
+  return stored ? JSON.parse(stored) : [];
+};
 
 const getStorageKey = (publicKey: string) => `inventory_${publicKey}`;
 
@@ -70,6 +121,17 @@ export default function VendorInventory() {
   const [showRestockDialog, setShowRestockDialog] = useState(false);
   const [restockAmount, setRestockAmount] = useState<number>(0);
   const [showLowStockAlerts, setShowLowStockAlerts] = useState(false);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
+    if (!user?.publicKey) return [];
+    return loadSuppliers(user.publicKey);
+  });
+  const [showSuppliers, setShowSuppliers] = useState(false);
+  const [viewItem, setViewItem] = useState<InventoryItem | null>(null);
+  const [showReport, setShowReport] = useState(false);
+
+  const getSupplier = (supplierId?: string) => {
+    return suppliers.find(s => s.id === supplierId);
+  };
 
   useEffect(() => {
     if (user?.publicKey) {
@@ -87,15 +149,27 @@ export default function VendorInventory() {
       return;
     }
 
-    if (!newItem.name || !newItem.sku || !newItem.price || !newItem.quantity) {
+    if (!newItem.name || !newItem.sku || !newItem.purchaseCost || !newItem.sellingPrice || !newItem.quantity) {
       toast.error('Please fill in all required fields');
       return;
     }
 
     const item: InventoryItem = {
       ...newItem as Required<InventoryItem>,
-      id: Date.now().toString(), // Replace with proper ID generation
+      id: Date.now().toString(),
       lowStockThreshold: newItem.lowStockThreshold || 10,
+      created: Date.now(),
+      lastUpdated: Date.now(),
+      stockHistory: [{
+        id: Date.now().toString(),
+        type: 'IN',
+        quantity: newItem.quantity,
+        date: Date.now(),
+        reason: 'Initial stock',
+        purchase: {
+          cost: newItem.purchaseCost
+        }
+      }]
     };
 
     setInventory(prev => [...prev, item]);
@@ -133,17 +207,58 @@ export default function VendorInventory() {
   const handleRestock = () => {
     if (!user?.publicKey || !selectedItem || restockAmount <= 0) return;
 
+    const updatedItem = {
+      ...selectedItem,
+      quantity: selectedItem.quantity + restockAmount,
+      lastUpdated: Date.now(),
+      stockHistory: [
+        ...selectedItem.stockHistory,
+        {
+          id: Date.now().toString(),
+          type: 'IN',
+          quantity: restockAmount,
+          date: Date.now(),
+          reason: 'Restock',
+          purchase: {
+            cost: selectedItem.purchaseCost
+          }
+        }
+      ]
+    };
+
     setInventory(prev => 
       prev.map(item => 
-        item.id === selectedItem.id 
-          ? { ...item, quantity: item.quantity + restockAmount }
-          : item
+        item.id === selectedItem.id ? { ...updatedItem, stockHistory: updatedItem.stockHistory.map(history => ({ ...history, type: history.type as 'IN' | 'OUT' })) } : item
       )
     );
+    
     setSelectedItem(null);
     setShowRestockDialog(false);
     setRestockAmount(0);
     toast.success('Stock updated successfully');
+  };
+
+  const handleAddSupplier = (supplier: Supplier) => {
+    if (!user?.publicKey) return;
+    const updatedSuppliers = [...suppliers, supplier];
+    saveSuppliers(user.publicKey, updatedSuppliers);
+    setSuppliers(updatedSuppliers);
+  };
+  
+  const handleEditSupplier = (updatedSupplier: Supplier) => {
+    if (!user?.publicKey) return;
+    const updatedSuppliers = suppliers.map(s => 
+      s.id === updatedSupplier.id ? updatedSupplier : s
+    );
+    saveSuppliers(user.publicKey, updatedSuppliers);
+    setSuppliers(updatedSuppliers);
+  };
+  
+  const handleDeleteSupplier = (id: string) => {
+    if (!user?.publicKey) return;
+    const updatedSuppliers = suppliers.filter(s => s.id !== id);
+    saveSuppliers(user.publicKey, updatedSuppliers);
+    setSuppliers(updatedSuppliers);
   };
 
   if (!user?.publicKey) {
@@ -177,21 +292,35 @@ export default function VendorInventory() {
             className="pl-10"
           />
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <FileDown className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Button variant="outline">
-            <FileUp className="mr-2 h-4 w-4" />
-            Import
+        <div className="grid grid-cols-4 sm:flex gap-2 w-full sm:w-auto">
+          <Button 
+            variant="outline"
+            className="flex-1 sm:flex-none"
+          >
+            <FileDown className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Export</span>
           </Button>
           <Button 
-            className="bg-gradient-to-r from-primary to-primary/80"
+            variant="outline"
+            className="flex-1 sm:flex-none"
+          >
+            <FileUp className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Import</span>
+          </Button>
+          <Button 
+            className="flex-1 sm:flex-none bg-gradient-to-r from-primary to-primary/80"
             onClick={() => setShowAddItem(true)}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Item
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Add Item</span>
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => setShowSuppliers(true)}
+            className="flex-1 sm:flex-none"
+          >
+            <Users className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Suppliers</span>
           </Button>
         </div>
       </div>
@@ -200,19 +329,96 @@ export default function VendorInventory() {
         {/* Inventory Summary Card */}
         <Card className='h-fit'>
           <CardHeader>
-            <CardTitle className="text-lg font-medium">
-              Inventory Summary
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-medium">
+                Inventory Summary
+              </CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowReport(true)}
+                className="h-8"
+              >
+                <FileText className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Generate Report</span>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Total Items</span>
-                <span className="font-medium">{inventory.length}</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-muted-foreground text-sm">Total Items</div>
+                  <div className="font-medium text-lg">{inventory.length}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground text-sm">Low Stock Items</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-lg">{lowStockItems.length}</span>
+                    {lowStockItems.length > 0 && (
+                      <Badge variant="destructive">Alert</Badge>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Low Stock Alerts</span>
-                <Badge variant="destructive">{lowStockItems.length}</Badge>
+
+              <div className="pt-4 border-t">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-muted-foreground text-sm">Total Stock Value</div>
+                    <div className="font-medium text-lg">
+                      KES {inventory.reduce((sum, item) => 
+                        sum + (item.quantity * item.sellingPrice), 0
+                      ).toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-sm">Cost of Goods</div>
+                    <div className="font-medium text-lg">
+                      KES {inventory.reduce((sum, item) => 
+                        sum + (item.quantity * item.purchaseCost), 0
+                      ).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-muted-foreground text-sm">Categories</div>
+                    <div className="font-medium text-lg">
+                      {new Set(inventory.map(item => item.category).filter(Boolean)).size}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-sm">Total Units</div>
+                    <div className="font-medium text-lg">
+                      {inventory.reduce((sum, item) => sum + item.quantity, 0)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-muted-foreground text-sm">Potential Profit</div>
+                    <div className="font-medium text-lg text-green-500">
+                      KES {inventory.reduce((sum, item) => 
+                        sum + (item.quantity * (item.sellingPrice - item.purchaseCost)), 0
+                      ).toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-sm">Avg. Margin</div>
+                    <div className="font-medium text-lg">
+                      {(inventory.reduce((sum, item) => 
+                        sum + ((item.sellingPrice - item.purchaseCost) / item.sellingPrice * 100), 0
+                      ) / (inventory.length || 1)).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -291,7 +497,8 @@ export default function VendorInventory() {
                 <TableRow>
                   <TableHead>Product</TableHead>
                   <TableHead>SKU</TableHead>
-                  <TableHead>Price</TableHead>
+                  <TableHead>Purchase Cost</TableHead>
+                  <TableHead>Selling Price</TableHead>
                   <TableHead>Quantity</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -299,10 +506,15 @@ export default function VendorInventory() {
               </TableHeader>
               <TableBody>
                 {inventory.map(item => (
-                  <TableRow key={item.id}>
+                  <TableRow 
+                    key={item.id}
+                    className="cursor-pointer hover:bg-accent/50 transition-colors"
+                    onClick={() => setViewItem(item)}
+                  >
                     <TableCell>{item.name}</TableCell>
                     <TableCell>{item.sku}</TableCell>
-                    <TableCell>KES {item.price.toLocaleString()}</TableCell>
+                    <TableCell>KES {item.purchaseCost.toLocaleString()}</TableCell>
+                    <TableCell>KES {item.sellingPrice.toLocaleString()}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {item.quantity}
@@ -313,7 +525,7 @@ export default function VendorInventory() {
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                         <Button 
                           variant="ghost" 
                           size="icon"
@@ -354,6 +566,49 @@ export default function VendorInventory() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
+              <Label>Product Image</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border-2 border-dashed rounded-lg p-4 text-center hover:bg-accent/50 transition-colors cursor-pointer">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id="image-upload"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setNewItem({ ...newItem, imageUrl: reader.result as string });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <label htmlFor="image-upload" className="cursor-pointer">
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Upload Image</span>
+                    </div>
+                  </label>
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Image URL"
+                    value={newItem.imageUrl || ''}
+                    onChange={(e) => setNewItem({ ...newItem, imageUrl: e.target.value })}
+                  />
+                  {newItem.imageUrl && (
+                    <img 
+                      src={newItem.imageUrl} 
+                      alt="Preview"
+                      className="w-full h-20 object-cover rounded-md"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
@@ -381,14 +636,25 @@ export default function VendorInventory() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="price">Price</Label>
+                <Label htmlFor="purchaseCost">Purchase Cost</Label>
                 <Input
-                  id="price"
+                  id="purchaseCost"
                   type="number"
-                  value={newItem.price || ''}
-                  onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) })}
+                  value={newItem.purchaseCost || ''}
+                  onChange={(e) => setNewItem({ ...newItem, purchaseCost: parseFloat(e.target.value) })}
                 />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="sellingPrice">Selling Price</Label>
+                <Input
+                  id="sellingPrice"
+                  type="number"
+                  value={newItem.sellingPrice || ''}
+                  onChange={(e) => setNewItem({ ...newItem, sellingPrice: parseFloat(e.target.value) })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="quantity">Initial Quantity</Label>
                 <Input
@@ -398,15 +664,15 @@ export default function VendorInventory() {
                   onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) })}
                 />
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="threshold">Low Stock Threshold</Label>
-              <Input
-                id="threshold"
-                type="number"
-                value={newItem.lowStockThreshold || ''}
-                onChange={(e) => setNewItem({ ...newItem, lowStockThreshold: parseInt(e.target.value) })}
-              />
+              <div className="grid gap-2">
+                <Label htmlFor="threshold">Low Stock Threshold</Label>
+                <Input
+                  id="threshold"
+                  type="number"
+                  value={newItem.lowStockThreshold || ''}
+                  onChange={(e) => setNewItem({ ...newItem, lowStockThreshold: parseInt(e.target.value) })}
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
@@ -415,6 +681,24 @@ export default function VendorInventory() {
                 value={newItem.description || ''}
                 onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="supplier">Supplier</Label>
+              <Select 
+                value={newItem.supplierId} 
+                onValueChange={(value) => setNewItem({ ...newItem, supplierId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map(supplier => (
+                    <SelectItem key={supplier.id} value={supplier.id}>
+                      {supplier.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
@@ -461,14 +745,25 @@ export default function VendorInventory() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="price">Price</Label>
+                <Label htmlFor="purchaseCost">Purchase Cost</Label>
                 <Input
-                  id="price"
+                  id="purchaseCost"
                   type="number"
-                  value={selectedItem?.price || ''}
-                  onChange={(e) => setSelectedItem({ ...selectedItem, price: parseFloat(e.target.value) } as InventoryItem)}
+                  value={selectedItem?.purchaseCost || ''}
+                  onChange={(e) => setSelectedItem({ ...selectedItem, purchaseCost: parseFloat(e.target.value) } as InventoryItem)}
                 />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="sellingPrice">Selling Price</Label>
+                <Input
+                  id="sellingPrice"
+                  type="number"
+                  value={selectedItem?.sellingPrice || ''}
+                  onChange={(e) => setSelectedItem({ ...selectedItem, sellingPrice: parseFloat(e.target.value) } as InventoryItem)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="quantity">Initial Quantity</Label>
                 <Input
@@ -478,15 +773,15 @@ export default function VendorInventory() {
                   onChange={(e) => setSelectedItem({ ...selectedItem, quantity: parseInt(e.target.value) } as InventoryItem)}
                 />
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="threshold">Low Stock Threshold</Label>
-              <Input
-                id="threshold"
-                type="number"
-                value={selectedItem?.lowStockThreshold || ''}
-                onChange={(e) => setSelectedItem({ ...selectedItem, lowStockThreshold: parseInt(e.target.value) } as InventoryItem)}
-              />
+              <div className="grid gap-2">
+                <Label htmlFor="threshold">Low Stock Threshold</Label>
+                <Input
+                  id="threshold"
+                  type="number"
+                  value={selectedItem?.lowStockThreshold || ''}
+                  onChange={(e) => setSelectedItem({ ...selectedItem, lowStockThreshold: parseInt(e.target.value) } as InventoryItem)}
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
@@ -549,6 +844,47 @@ export default function VendorInventory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Selected Item Dialog */}
+      
+      {selectedItem && (
+        <InventoryItemDialog
+          item={selectedItem}
+          supplier={getSupplier(selectedItem.supplierId)}
+          open={!!selectedItem}
+          onClose={() => setSelectedItem(null)}
+        />
+      )}
+
+      {/* View Item Dialog */}
+      {viewItem && (
+        <InventoryItemDialog
+          item={viewItem}
+          supplier={getSupplier(viewItem.supplierId)}
+          open={!!viewItem}
+          onClose={() => setViewItem(null)}
+        />
+      )}
+
+      {/* Suppliers Dialog */}
+      
+      
+      <SuppliersDialog
+              open={showSuppliers}
+              onOpenChange={setShowSuppliers}
+              suppliers={suppliers}
+              onAddSupplier={handleAddSupplier}
+              onEditSupplier={handleEditSupplier}
+              onDeleteSupplier={handleDeleteSupplier}
+      />
+
+      {/* Inventory Report Dialog */}
+      <InventoryReportDialog
+        open={showReport}
+        onOpenChange={setShowReport}
+        inventory={inventory}
+        dateGenerated={new Date()}
+      />
     </div>
   );
 }

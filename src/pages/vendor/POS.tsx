@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { QrCode, Undo2, RefreshCcw } from 'lucide-react'; // Add RefreshCcw import
+import { QrCode, Undo2, RefreshCcw, Send } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import {
@@ -33,13 +33,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { useWebSocket } from '@/contexts/WebSocketContext';
+import { Label } from '@/components/ui/label';
+import { OnlyBalance } from './Balance';
+import { getBalance } from '@/services/balance';
 
 interface CartItem {
   id: string;
   name: string;
-  price: number;
+  sellingPrice: number;
   quantity: number;
   sku: string;
+  imageUrl?: string;
 }
 
 interface PurchaseHistory {
@@ -48,6 +53,7 @@ interface PurchaseHistory {
   total: number;
   timestamp: number;
   transactionId?: string;
+  paymentRequestStatus?: 'pending' | 'completed' | 'failed';
 }
 
 interface Transaction {
@@ -113,6 +119,11 @@ export default function VendorPOS() {
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
+  const [showPaymentRequestDialog, setShowPaymentRequestDialog] = useState(false);
+  const [userPhoneNumber, setUserPhoneNumber] = useState('');
+  const [balance, setBalance] = useState<number | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const { socket } = useWebSocket();
 
   const inventory = user?.publicKey 
     ? loadInventoryFromStorage(user.publicKey) 
@@ -124,7 +135,7 @@ export default function VendorPOS() {
   );
 
   const totalAmount = cart.reduce((sum, item) => 
-    sum + (item.price * item.quantity), 0
+    sum + (item.sellingPrice * item.quantity), 0
   );
 
   const addToCart = (item: InventoryItem) => {
@@ -182,7 +193,22 @@ export default function VendorPOS() {
       if (cartItem) {
         return {
           ...item,
-          quantity: item.quantity - cartItem.quantity
+          quantity: item.quantity - cartItem.quantity,
+          lastUpdated: Date.now(),
+          stockHistory: [
+            ...item.stockHistory,
+            {
+              id: Date.now().toString(),
+              type: 'OUT' as 'OUT',
+              quantity: cartItem.quantity,
+              date: Date.now(),
+              reason: 'Sale',
+              sale: {
+                price: cartItem.sellingPrice,
+                receipt: Date.now().toString() // You might want to use a proper receipt number
+              }
+            }
+          ]
         };
       }
       return item;
@@ -206,6 +232,57 @@ export default function VendorPOS() {
     setPendingAmount(finalAmount);
     setShowConfirmDialog(true);
   };
+
+  const handlePaymentRequest = async () => {
+    if (!user?.phoneNumber || cart.length === 0 || !userPhoneNumber) return;
+  
+    try {
+      console.log('Sending payment request to:', userPhoneNumber);
+      
+      // Create the purchase record first
+      const purchase: PurchaseHistory = {
+        id: Date.now().toString(),
+        items: [...cart],
+        total: totalAmount,
+        timestamp: Date.now(),
+        paymentRequestStatus: 'pending'
+      };
+  
+      // Send the payment request
+      const response = await fetch('http://localhost:2225/payment-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userPhoneNumber.trim(), // Remove any whitespace
+          vendorId: user.phoneNumber,
+          amount: totalAmount,
+          purchaseId: purchase.id
+        })
+      });
+  
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to send payment request');
+      }
+  
+      // Save the purchase to history
+      setPurchaseHistory(prev => {
+        const updated = [purchase, ...prev];
+        savePurchaseHistory(user.publicKey, updated);
+        return updated;
+      });
+  
+      // Update inventory
+      updateInventoryAfterPurchase();
+      setCart([]);
+      setShowPaymentRequestDialog(false);
+      toast.success('Payment request sent and purchase recorded');
+    } catch (error) {
+      console.error('Payment request error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to send payment request');
+    }
+  };
+  
 
   const confirmPurchase = () => {
     if (!user?.publicKey || !pendingAmount) return;
@@ -293,12 +370,46 @@ export default function VendorPOS() {
     }
   }, [user?.publicKey]);
 
+  const fetchBalance = useCallback(async () => {
+    if (!user?.publicKey) return;
+
+    try {
+      setIsLoadingBalance(true);
+      const balance = await getBalance(user.publicKey);
+      setBalance(balance);
+    } catch (error) {
+      console.error('Failed to fetch balance:', error);
+      toast.error('Failed to update balance');
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, [user?.publicKey]);
+
   useEffect(() => {
     fetchRecentTransactions();
   }, [fetchRecentTransactions]);
 
+  useEffect(() => {
+    fetchBalance();
+  }, [fetchBalance]);
+
+  useEffect(() => {
+    if (!socket) return;
+  
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'payment-complete') {
+        toast.success(`Payment of KES ${data.data.amount} received from ${data.data.userId}`);
+        fetchRecentTransactions();
+        fetchBalance();
+      }
+    };
+  }, [socket, fetchRecentTransactions, fetchBalance]);
+
   return (
     <div className="space-y-6">
+      <OnlyBalance />
+
       <Tabs defaultValue="catalog" className="w-full">
         <TabsList className="grid w-full grid-cols-2 bg-muted">
           <TabsTrigger 
@@ -344,24 +455,39 @@ export default function VendorPOS() {
                         {filteredInventory.map(item => (
                           <div 
                             key={item.id}
-                            className="flex items-center justify-between p-2 rounded-lg border"
+                            className="flex items-center gap-4 p-2 rounded-lg border"
                           >
-                            <div>
-                              <p className="font-medium">{item.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                SKU: {item.sku}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                KES {item.price.toLocaleString()} ({item.quantity} in stock)
-                              </p>
+                            <div className="w-16 h-16 rounded-lg border overflow-hidden flex-shrink-0">
+                              {item.imageUrl ? (
+                                <img 
+                                  src={item.imageUrl} 
+                                  alt={item.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-muted flex items-center justify-center">
+                                  <Package className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                              )}
                             </div>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => addToCart(item)}
-                            >
-                              Add to Cart
-                            </Button>
+                            <div className="flex-1 flex justify-between items-center">
+                              <div>
+                                <p className="font-medium">{item.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  SKU: {item.sku}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  KES {item.sellingPrice.toLocaleString()} ({item.quantity} in stock)
+                                </p>
+                              </div>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => addToCart(item)}
+                              >
+                                Add to Cart
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -418,32 +544,47 @@ export default function VendorPOS() {
                               {cart.map(item => (
                                 <div 
                                   key={item.id}
-                                  className="flex items-center justify-between p-2 rounded-lg border"
+                                  className="flex items-center gap-4 p-2 rounded-lg border"
                                 >
-                                  <div>
-                                    <p className="font-medium">{item.name}</p>
-                                    <p className="text-sm text-muted-foreground">
-                                      KES {item.price.toLocaleString()} × {item.quantity}
-                                    </p>
+                                  <div className="w-12 h-12 rounded-lg border overflow-hidden flex-shrink-0">
+                                    {item.imageUrl ? (
+                                      <img 
+                                        src={item.imageUrl} 
+                                        alt={item.name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full bg-muted flex items-center justify-center">
+                                        <Package className="h-4 w-4 text-muted-foreground" />
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <Button 
-                                      variant="outline" 
-                                      size="icon"
-                                      className="h-8 w-8 p-0 hover:bg-muted"
-                                      onClick={() => updateCartItemQuantity(item.id, -1)}
-                                    >
-                                      <Minus className="h-4 w-4 text-muted-foreground" />
-                                    </Button>
-                                    <span className="w-8 text-center font-medium">{item.quantity}</span>
-                                    <Button 
-                                      variant="outline" 
-                                      size="icon"
-                                      className="h-8 w-8 p-0 hover:bg-muted"
-                                      onClick={() => updateCartItemQuantity(item.id, 1)}
-                                    >
-                                      <Plus className="h-4 w-4 text-muted-foreground" />
-                                    </Button>
+                                  <div className="flex-1 flex justify-between items-center">
+                                    <div>
+                                      <p className="font-medium">{item.name}</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        KES {item.sellingPrice.toLocaleString()} × {item.quantity}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Button 
+                                        variant="outline" 
+                                        size="icon"
+                                        className="h-8 w-8 p-0 hover:bg-muted"
+                                        onClick={() => updateCartItemQuantity(item.id, -1)}
+                                      >
+                                        <Minus className="h-4 w-4 text-muted-foreground" />
+                                      </Button>
+                                      <span className="w-8 text-center font-medium">{item.quantity}</span>
+                                      <Button 
+                                        variant="outline" 
+                                        size="icon"
+                                        className="h-8 w-8 p-0 hover:bg-muted"
+                                        onClick={() => updateCartItemQuantity(item.id, 1)}
+                                      >
+                                        <Plus className="h-4 w-4 text-muted-foreground" />
+                                      </Button>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
@@ -460,13 +601,25 @@ export default function VendorPOS() {
                           KES {totalAmount.toLocaleString()}
                         </span>
                       </div>
-                      <Button 
-                        className="w-full"
-                        onClick={() => generateQR()}
-                        disabled={cart.length === 0}
-                      >
-                        Generate QR for Cart
-                      </Button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                          className="w-full"
+                          onClick={() => generateQR()}
+                          disabled={cart.length === 0}
+                        >
+                          <QrCode className="mr-2 h-4 w-4" />
+                          Generate QR
+                        </Button>
+                        <Button 
+                          className="w-full"
+                          variant="secondary"
+                          onClick={() => setShowPaymentRequestDialog(true)}
+                          disabled={cart.length === 0}
+                        >
+                          <Send className="mr-2 h-4 w-4" />
+                          Request Pay
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 </div>
@@ -563,7 +716,7 @@ export default function VendorPOS() {
                                   {purchase.items.map(item => (
                                     <div key={item.id} className="flex justify-between text-sm">
                                       <span>{item.quantity}x {item.name}</span>
-                                      <span>KES {(item.price * item.quantity).toLocaleString()}</span>
+                                      <span>KES {(item.sellingPrice * item.quantity).toLocaleString()}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -758,9 +911,9 @@ export default function VendorPOS() {
                                 <div className="text-xs text-muted-foreground">SKU: {item.sku}</div>
                               </div>
                               <div className="text-right">
-                                <div>KES {(item.price * item.quantity).toLocaleString()}</div>
+                                <div>KES {(item.sellingPrice * item.quantity).toLocaleString()}</div>
                                 <div className="text-xs text-muted-foreground">
-                                  @ KES {item.price.toLocaleString()}
+                                  @ KES {item.sellingPrice.toLocaleString()}
                                 </div>
                               </div>
                             </div>
@@ -797,7 +950,7 @@ export default function VendorPOS() {
                 {cart.map(item => (
                   <div key={item.id} className="flex justify-between text-sm">
                     <span>{item.quantity}x {item.name}</span>
-                    <span>KES {(item.price * item.quantity).toLocaleString()}</span>
+                    <span>KES {(item.sellingPrice * item.quantity).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -885,9 +1038,9 @@ export default function VendorPOS() {
                                 <div className="text-xs text-muted-foreground">SKU: {item.sku}</div>
                               </div>
                               <div className="text-right">
-                                <div>KES {(item.price * item.quantity).toLocaleString()}</div>
+                                <div>KES {(item.sellingPrice * item.quantity).toLocaleString()}</div>
                                 <div className="text-xs text-muted-foreground">
-                                  @ KES {item.price.toLocaleString()}
+                                  @ KES {item.sellingPrice.toLocaleString()}
                                 </div>
                               </div>
                             </div>
@@ -920,6 +1073,46 @@ export default function VendorPOS() {
               }}
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPaymentRequestDialog} onOpenChange={setShowPaymentRequestDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Payment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Customer Phone Number</Label>
+              <Input
+                placeholder="+254 7XX XXX XXX"
+                value={userPhoneNumber}
+                onChange={(e) => setUserPhoneNumber(e.target.value)}
+              />
+            </div>
+            
+            <div className="border rounded-lg p-4 space-y-2">
+              <p className="font-medium">Purchase Summary:</p>
+              {cart.map(item => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span>{item.quantity}x {item.name}</span>
+                  <span>KES {(item.sellingPrice * item.quantity).toLocaleString()}</span>
+                </div>
+              ))}
+              <div className="flex justify-between font-medium pt-2 border-t mt-2">
+                <span>Total Amount:</span>
+                <span>KES {totalAmount.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPaymentRequestDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handlePaymentRequest}>
+              Send Request
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -27,8 +27,10 @@ import { makeDeposit, makeWithdrawal, sendTransaction, stripPublicKey } from '@/
 import { lookupUserByPhone, lookupUserByUsername } from '@/services/users';
 import { getBalance } from '@/services/balance';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWebSocket } from '@/contexts/WebSocketContext';
+
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -131,6 +133,12 @@ export default function Dashboard() {
   const [showSendForm, setShowSendForm] = useState(false);
   const [showQRScan, setShowQRScan] = useState(false);
   const [showBioAuth, setShowBioAuth] = useState(false);
+  const [paymentRequest, setPaymentRequest] = useState<{
+    vendorId: string;
+    amount: number;
+  } | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const { socket } = useWebSocket();
 
 
 
@@ -219,6 +227,31 @@ export default function Dashboard() {
       setIsPrivateKeyActive(false);
     }
   }, [user, token]);
+
+  useEffect(() => {
+    if (!socket) return;
+  
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
+  
+        if (data.type === 'payment-request') {
+          console.log('Payment request received:', data.data);
+          setPaymentRequest(data.data);
+          toast.info('New payment request received');
+        }
+      } catch (error) {
+        console.error('Error handling WebSocket message:', error);
+      }
+    };
+  
+    socket.addEventListener('message', handleMessage);
+  
+    return () => {
+      socket.removeEventListener('message', handleMessage);
+    };
+  }, [socket]);
 
   useEffect(() => {
     if (isPrivateKeyActive && privateKey) {
@@ -314,6 +347,72 @@ export default function Dashboard() {
       setShowConfirmation(true);
     } catch (error: any) {
       toast.error(error.message || 'Failed to verify recipient');
+    }
+  };
+
+  const handlePaymentComplete = async () => {
+    if (!paymentRequest || !user?.phoneNumber || !isPrivateKeyActive || !privateKey) {
+      toast.error('Please ensure private key is active');
+      return;
+    }
+  
+    try {
+      // First verify the recipient vendor
+      const recipientData = await lookupUserByPhone(paymentRequest.vendorId);
+      if (!recipientData) {
+        throw new Error('Vendor not found');
+      }
+  
+      // Attempt the blockchain transaction
+      const result = await sendTransaction(
+        user.publicKey,
+        privateKey,
+        recipientData.publicKey,
+        paymentRequest.amount,
+        token!
+      );
+  
+      // Only if transaction succeeds, notify the vendor
+      await fetch('http://localhost:2225/payment-complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.phoneNumber,
+          vendorId: paymentRequest.vendorId,
+          amount: paymentRequest.amount,
+          status: 'success',
+          transactionId: result.txId // Add transaction ID if available in result
+        })
+      });
+  
+      // Update local state
+      setPaymentRequest(null);
+      fetchBalance(); // Refresh balance
+      fetchRecentTransactions(); // Refresh transactions
+      
+      toast.success('Payment completed successfully');
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      
+      // Notify vendor of failure if needed
+      try {
+        await fetch('http://localhost:2225/payment-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.phoneNumber,
+            vendorId: paymentRequest.vendorId,
+            amount: paymentRequest.amount,
+            status: 'failed',
+            error: error.message
+          })
+        });
+      } catch (notifyError) {
+        console.error('Failed to notify vendor of failure:', notifyError);
+      }
+  
+      toast.error(error.message || 'Payment failed');
+      setPaymentRequest(null);
     }
   };
 
@@ -1121,6 +1220,60 @@ export default function Dashboard() {
               Confirm Withdrawal
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog 
+        open={!!paymentRequest} 
+        onOpenChange={(open) => {
+          if (!open && !isProcessingPayment) setPaymentRequest(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Payment Request</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>A vendor has requested payment of:</p>
+            <div className="text-2xl font-bold text-center">
+              KES {paymentRequest?.amount.toLocaleString()}
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              From vendor: {paymentRequest?.vendorId}
+            </p>
+            {isProcessingPayment && (
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <RefreshCcw className="h-4 w-4 animate-spin" />
+                Processing payment...
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setPaymentRequest(null)}
+              disabled={isProcessingPayment}
+            >
+              Decline
+            </Button>
+            <Button 
+              onClick={async () => {
+                setIsProcessingPayment(true);
+                try {
+                  await handlePaymentComplete();
+                } finally {
+                  setIsProcessingPayment(false);
+                }
+              }}
+              disabled={!isPrivateKeyActive || isProcessingPayment}
+            >
+              {!isPrivateKeyActive 
+                ? 'Activate Private Key to Pay' 
+                : isProcessingPayment 
+                ? 'Processing...' 
+                : 'Pay Now'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
