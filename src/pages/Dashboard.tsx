@@ -18,13 +18,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowUpRight, QrCode, Fingerprint, Search, Plus, Minus, Upload, RefreshCcw, Eye, Phone, User, AtSign, DollarSign, X, Camera } from 'lucide-react';
+import { ArrowUpRight, QrCode, Fingerprint, Search, Plus, Minus, Upload, RefreshCcw, Eye, Phone, User, AtSign, DollarSign, X, Camera, InfoIcon, CheckCircle, AlertCircle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCallback, useEffect, useState } from 'react';
 import { makeDeposit, makeWithdrawal, sendTransaction, stripPublicKey } from '@/services/transactions';
-import { lookupUserByPhone, lookupUserByUsername } from '@/services/users';
+import { lookupUserByPhone, lookupUserByUsername, getFullUserDetails } from '@/services/users';
 import { getBalance } from '@/services/balance';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -136,10 +136,16 @@ export default function Dashboard() {
   const [paymentRequest, setPaymentRequest] = useState<{
     vendorId: string;
     amount: number;
+    purchaseId: string;
   } | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const { socket } = useWebSocket();
-
+  const [showQuickPayBalance, setShowQuickPayBalance] = useState(false);
+  const [showQuickPayInfo, setShowQuickPayInfo] = useState(false);
+  const [isProcessingDeposit, setIsProcessingDeposit] = useState(false);
+  const [isProcessingWithdraw, setIsProcessingWithdraw] = useState(false);
+  const [isProcessingWithdrawConfirm, setIsProcessingWithdrawConfirm] = useState(false);
+  const [isProcessingSend, setIsProcessingSend] = useState(false);
 
 
   const fetchBalance = useCallback(async () => {
@@ -239,7 +245,7 @@ export default function Dashboard() {
         if (data.type === 'payment-request') {
           console.log('Payment request received:', data.data);
           setPaymentRequest(data.data);
-          toast.info('New payment request received');
+          toast.info('New payment request received' + ': ' + JSON.stringify(data));
         }
       } catch (error) {
         console.error('Error handling WebSocket message:', error);
@@ -274,55 +280,89 @@ export default function Dashboard() {
   
   const handleDeposit = async (amount: string) => {
     try {
+      setIsProcessingDeposit(true);
       if (!user?.publicKey || !token) {
         throw new Error('Please login first');
       }
-
+  
       const numAmount = parseFloat(amount);
       if (isNaN(numAmount) || numAmount <= 0) {
         throw new Error('Please enter a valid amount');
       }
-
-      toast.info(await makeDeposit(user.publicKey, numAmount, token));
+  
+      await makeDeposit(user.publicKey, numAmount, token);
+      toast.success('Deposit request sent successfully');
       setAmount('');
       fetchBalance();
     } catch (error: any) {
       toast.error(error.message || 'Deposit failed');
+    } finally {
+      setIsProcessingDeposit(false);
     }
   };
 
   const handleWithdraw = async (amount: string, method: 'mpesa' | 'bank') => {
     try {
+      setIsProcessingWithdraw(true);
       if (!user?.publicKey || !token) {
         throw new Error('Please login first');
       }
-
+  
       const numAmount = parseFloat(amount);
       if (isNaN(numAmount) || numAmount <= 0) {
         throw new Error('Please enter a valid amount');
       }
-
+  
       if (!privateKey) {
         throw new Error('Please provide your private key');
       }
-
+  
       const result = await makeWithdrawal(
         user.publicKey,
         privateKey,
         numAmount,
         token
       );
-
-      toast.info(result);
+  
+      toast.success('Withdrawal request sent successfully');
       setAmount('');
-      setPrivateKey('');
+      //setPrivateKey('');
       setWithdrawDialogOpen(false);
       fetchBalance();
     } catch (error: any) {
       toast.error(error.message || 'Withdrawal failed');
+    } finally {
+      setIsProcessingWithdraw(false);
     }
   };
 
+  const handleConfirmedSend = async () => {
+    try {
+      if (!recipientDetails) return;
+      setIsProcessingSend(true);
+  
+      const numAmount = parseFloat(amount);
+      const result = await sendTransaction(
+        user!.publicKey,
+        privateKey,
+        recipientDetails.publicKey,
+        numAmount,
+        token!
+      );
+  
+      toast.info(result);
+      setAmount('');
+      setRecipientId('');
+      setShowConfirmation(false);
+      setRecipientDetails(null);
+      setShowSendForm(false);
+      fetchBalance();
+    } catch (error: any) {
+      toast.error(error.message || 'Transaction failed');
+    } finally {
+      setIsProcessingSend(false);
+    }
+  };
   const handleSendMoney = async () => {
     try {
       if (!user?.publicKey || !token) {
@@ -338,9 +378,9 @@ export default function Dashboard() {
         throw new Error('Please enter recipient details');
       }
   
-      // Lookup recipient's public key
+      // Use the new combined lookup
       const recipientData = recipientType === 'phone' 
-        ? await lookupUserByPhone(recipientId)
+        ? await getFullUserDetails(recipientId)
         : await lookupUserByUsername(recipientId);
   
       setRecipientDetails(recipientData);
@@ -380,8 +420,8 @@ export default function Dashboard() {
           userId: user.phoneNumber,
           vendorId: paymentRequest.vendorId,
           amount: paymentRequest.amount,
-          status: 'success',
-          transactionId: result.txId // Add transaction ID if available in result
+          purchaseId: paymentRequest.purchaseId,
+          status: 'success'
         })
       });
   
@@ -403,6 +443,7 @@ export default function Dashboard() {
             userId: user.phoneNumber,
             vendorId: paymentRequest.vendorId,
             amount: paymentRequest.amount,
+            purchaseId: paymentRequest.purchaseId,
             status: 'failed',
             error: error.message
           })
@@ -416,30 +457,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleConfirmedSend = async () => {
-    try {
-      if (!recipientDetails) return;
-  
-      const numAmount = parseFloat(amount);
-      const result = await sendTransaction(
-        user!.publicKey,
-        privateKey,
-        recipientDetails.publicKey,
-        numAmount,
-        token!
-      );
-  
-      toast.info(result);
-      setAmount('');
-      setRecipientId('');
-      setShowConfirmation(false);
-      setRecipientDetails(null);
-      setShowSendForm(false);
-      fetchBalance();
-    } catch (error: any) {
-      toast.error(error.message || 'Transaction failed');
-    }
-  };
 
   const PrivateKeyActivation = () => (
     <Popover>
@@ -553,16 +570,29 @@ export default function Dashboard() {
             <CardTitle className="text-lg font-medium flex items-center justify-between">
               Available Balance
               <div className="flex items-center gap-2">
-                {user?.publicKey && token && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setShowStats(!showStats)}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setShowQuickPayBalance(!showQuickPayBalance)}
+                  title={showQuickPayBalance ? "Hide Balance" : "Show Balance"}
+                >
+                  <Eye className={cn(
+                    "h-4 w-4 transition-opacity",
+                    !showQuickPayBalance && "opacity-50"
+                  )} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setShowQuickPayInfo(!showQuickPayInfo)}
+                >
+                  <InfoIcon className={cn(
+                    "h-4 w-4 transition-opacity",
+                    showQuickPayInfo && "text-primary"
+                  )} />
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -578,7 +608,10 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-4">
               <div>
-                <div className="text-4xl font-bold">
+                <div className={cn(
+                  "text-4xl font-bold transition-all duration-200",
+                  !showQuickPayBalance && "blur-md select-none"
+                )}>
                   {isLoadingBalance ? (
                     <span className="animate-pulse">Loading...</span>
                   ) : (
@@ -592,39 +625,45 @@ export default function Dashboard() {
                 </Badge>
               </div>
 
-              {user?.publicKey && token && showStats && (
-                <div className="pt-4 border-t border-border/50 space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Total Sent</div>
-                      <div className="font-medium">
-                        KES {accountStats?.totalSent?.toLocaleString() ?? '0'}
+              {showQuickPayInfo && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-4 border-t border-border/50 space-y-4">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <div className="text-muted-foreground">Total Sent</div>
+                        <div className="font-medium">
+                          KES {accountStats?.totalSent?.toLocaleString() ?? '0'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Total Received</div>
+                        <div className="font-medium">
+                          KES {accountStats?.totalReceived?.toLocaleString() ?? '0'}
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <div className="text-muted-foreground">Total Received</div>
-                      <div className="font-medium">
-                        KES {accountStats?.totalReceived?.toLocaleString() ?? '0'}
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <div className="text-muted-foreground">Today's Transactions</div>
+                        <div className="font-medium">
+                          {recentTransactions.filter(tx => 
+                            new Date(tx.timestamp).toDateString() === new Date().toDateString()
+                          ).length}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Daily Limit</div>
+                        <div className="font-medium">KES 500,000</div>
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Transactions</div>
-                      <div className="font-medium">
-                        {accountStats?.transactionCount ?? 0}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Last Activity</div>
-                      <div className="font-medium">
-                        {accountStats?.lastSeen 
-                          ? formatDistanceToNow(accountStats.lastSeen, { addSuffix: true })
-                          : 'Never'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                </motion.div>
               )}
             </div>
           </CardContent>
@@ -632,7 +671,10 @@ export default function Dashboard() {
 
         <Card className="col-span-1 md:col-span-2">
           <CardHeader>
-            <CardTitle className="text-lg font-medium">Quick Pay</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-medium">Quick Pay</CardTitle>
+            </div>
+
             <PrivateKeyActivation />
           </CardHeader>
           <CardContent>
@@ -810,9 +852,18 @@ export default function Dashboard() {
                                     <Button 
                                       className="flex-1"
                                       onClick={handleConfirmedSend}
-                                      disabled={!isPrivateKeyActive}
+                                      disabled={!isPrivateKeyActive || isProcessingSend}
                                     >
-                                      {isPrivateKeyActive ? 'Confirm Send' : 'Activate Private Key to Send'}
+                                      {isProcessingSend ? (
+                                        <>
+                                          <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                                          Processing...
+                                        </>
+                                      ) : isPrivateKeyActive ? (
+                                        'Confirm Send'
+                                      ) : (
+                                        'Activate Private Key to Send'
+                                      )}
                                     </Button>
                                   </div>
                                 </div>
@@ -979,6 +1030,7 @@ export default function Dashboard() {
                             variant="outline" 
                             onClick={() => setAmount(amt.value)}
                             className={amount === amt.value ? "border-primary" : ""}
+                            disabled={isProcessingDeposit}
                           >
                             {amt.label}
                           </Button>
@@ -994,14 +1046,23 @@ export default function Dashboard() {
                             type="number"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
+                            disabled={isProcessingDeposit}
                           />
                         </div>
                       </div>
                       <Button 
                         className="w-full"
                         onClick={() => handleDeposit(amount)}
+                        disabled={isProcessingDeposit}
                       >
-                        Process Deposit
+                        {isProcessingDeposit ? (
+                          <>
+                            <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          'Process Deposit'
+                        )}
                       </Button>
                     </div>
                   </PopoverContent>
@@ -1077,6 +1138,7 @@ export default function Dashboard() {
                             variant="outline" 
                             onClick={() => setAmount(amt.value)}
                             className={amount === amt.value ? "border-destructive" : ""}
+                            disabled={isProcessingWithdraw}
                           >
                             {amt.label}
                           </Button>
@@ -1092,6 +1154,7 @@ export default function Dashboard() {
                             type="number"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
+                            disabled={isProcessingWithdraw}
                           />
                         </div>
                       </div>
@@ -1099,8 +1162,16 @@ export default function Dashboard() {
                         className="w-full" 
                         variant="destructive"
                         onClick={() => setWithdrawDialogOpen(true)}
+                        disabled={isProcessingWithdraw}
                       >
-                        Process Withdrawal
+                        {isProcessingWithdraw ? (
+                          <>
+                            <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          'Process Withdrawal'
+                        )}
                       </Button>
                     </div>
                   </PopoverContent>
@@ -1183,6 +1254,7 @@ export default function Dashboard() {
                 onChange={(e) => setPrivateKey(e.target.value)}
                 className="font-mono text-xs"
                 rows={4}
+                disabled={isProcessingWithdrawConfirm}
               />
               <div className="relative">
                 <Input
@@ -1190,6 +1262,7 @@ export default function Dashboard() {
                   accept=".txt"
                   className="hidden"
                   id="key-file"
+                  disabled={isProcessingWithdrawConfirm}
                   onChange={async (e) => {
                     try {
                       const file = e.target.files?.[0];
@@ -1207,6 +1280,7 @@ export default function Dashboard() {
                   variant="outline"
                   className="w-full"
                   onClick={() => document.getElementById('key-file')?.click()}
+                  disabled={isProcessingWithdrawConfirm}
                 >
                   <Upload className="mr-2 h-4 w-4" />
                   Upload Key File
@@ -1215,9 +1289,24 @@ export default function Dashboard() {
             </div>
             <Button 
               variant="destructive"
-              onClick={() => handleWithdraw(amount, 'mpesa')}
+              onClick={async () => {
+                setIsProcessingWithdrawConfirm(true);
+                try {
+                  await handleWithdraw(amount, 'mpesa');
+                } finally {
+                  setIsProcessingWithdrawConfirm(false);
+                }
+              }}
+              disabled={isProcessingWithdrawConfirm || !privateKey || !amount}
             >
-              Confirm Withdrawal
+              {isProcessingWithdrawConfirm ? (
+                <>
+                  <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Confirm Withdrawal'
+              )}
             </Button>
           </div>
         </DialogContent>
@@ -1241,6 +1330,37 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground text-center">
               From vendor: {paymentRequest?.vendorId}
             </p>
+
+            {/* Add balance check section */}
+            <div className="border rounded-lg p-4 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Your Balance:</span>
+                <span className="font-medium">KES {balance?.toLocaleString() ?? '0'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Amount Payable:</span>
+                <span className="font-medium">KES {paymentRequest?.amount.toLocaleString()}</span>
+              </div>
+              {balance !== null && paymentRequest && (
+                <div className={cn(
+                  "flex items-center gap-2 text-sm mt-2 pt-2 border-t",
+                  balance >= paymentRequest.amount ? "text-green-500" : "text-red-500"
+                )}>
+                  {balance >= paymentRequest.amount ? (
+                    <>
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Sufficient balance available</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="h-4 w-4" />
+                      <span>Insufficient balance. Top up KES {(paymentRequest.amount - balance).toLocaleString()} to proceed.</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
             {isProcessingPayment && (
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <RefreshCcw className="h-4 w-4 animate-spin" />
@@ -1251,7 +1371,30 @@ export default function Dashboard() {
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => setPaymentRequest(null)}
+              onClick={async () => {
+                if (!paymentRequest || !user?.phoneNumber) return;
+
+                try {
+                  // Send an invalid request to trigger the catch block
+                  await fetch('http://localhost:2225/payment-complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      // Send incomplete/invalid data to trigger error
+                      userId: user.phoneNumber,
+                      vendorId: paymentRequest.vendorId,
+                      purchaseId: paymentRequest.purchaseId,
+                      // Omit required fields to trigger catch block
+                      error: 'declined',
+                      // Missing amount and purchaseId will cause error
+                    })
+                  });
+                } catch (error) {
+                  console.error('Failed to send decline notification:', error);
+                } finally {
+                  setPaymentRequest(null);
+                }
+              }}
               disabled={isProcessingPayment}
             >
               Decline
@@ -1265,10 +1408,18 @@ export default function Dashboard() {
                   setIsProcessingPayment(false);
                 }
               }}
-              disabled={!isPrivateKeyActive || isProcessingPayment}
+              disabled={
+                !isPrivateKeyActive || 
+                isProcessingPayment || 
+                !balance || 
+                !paymentRequest || 
+                balance < paymentRequest.amount
+              }
             >
               {!isPrivateKeyActive 
-                ? 'Activate Private Key to Pay' 
+                ? 'Activate Private Key to Pay'
+                : (balance ?? 0) < (paymentRequest?.amount ?? 0)
+                ? 'Insufficient Balance'
                 : isProcessingPayment 
                 ? 'Processing...' 
                 : 'Pay Now'}

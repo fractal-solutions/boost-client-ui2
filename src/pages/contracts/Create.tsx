@@ -17,11 +17,13 @@ import { FileText,
    CircleDollarSign, 
    Flag, 
    Calendar as CalendarIcon, 
-   User as UserIcon 
+   User as UserIcon, 
+   RefreshCcw
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { lookupUserByPhone, getFullUserDetails } from '@/services/users';
 
 type TimeUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
 
@@ -43,10 +45,17 @@ interface ContractFormData {
     };
   };
   participants: string[];
+  recipientDetails?: RecipientDetails; 
   metadata?: {
     title?: string;
     description?: string;
   };
+}
+
+interface RecipientDetails {
+  phoneNumber: string;
+  username: string;
+  publicKey: string;
 }
 
 const formatDate = (dateString: string) => {
@@ -78,6 +87,90 @@ export default function ContractsCreate() {
       description: ''
     }
   });
+  const [privateKey, setPrivateKey] = useState('');
+  const [recipientPhone, setRecipientPhone] = useState('');
+  const [isLoadingRecipient, setIsLoadingRecipient] = useState(false);
+  const [isProcessingContract, setIsProcessingContract] = useState(false);
+
+
+
+  const lookupRecipient = async (phoneNumber: string) => {
+    try {
+      setIsLoadingRecipient(true);
+      const userData = await getFullUserDetails(phoneNumber);
+      
+      setFormData(prev => ({
+        ...prev,
+        participants: [userData.publicKey],
+        recipientDetails: {
+          phoneNumber: userData.phoneNumber,
+          username: userData.username,
+          publicKey: userData.publicKey
+        }
+      }));
+    } catch (error: any) {
+      toast.error('Recipient not found');
+      setFormData(prev => ({
+        ...prev,
+        participants: [],
+        recipientDetails: undefined
+      }));
+    } finally {
+      setIsLoadingRecipient(false);
+    }
+  };
+
+  const handleCreateContract = async () => {
+    try {
+      setIsProcessingContract(true);
+      
+      if (!user?.publicKey || !token) {
+        throw new Error('Please login first');
+      }
+  
+      if (!privateKey) {
+        throw new Error('Please provide your private key');
+      }
+  
+      const response = await fetch('http://localhost:2223/contract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          creator: {
+            publicKey: user.publicKey,
+            privateKey: privateKey 
+          },
+          participants: formData.participants,
+          amount: Number(formData.amount),
+          interval: Number(formData.interval),
+          endDate: new Date(formData.endDate).getTime(),
+          type: formData.type || 'RECURRING_PAYMENT',
+          terms: formData.terms || {},
+          metadata: formData.metadata || {},
+          token: token
+        })
+      });
+  
+      const data = await response.json();
+      if (!data.success) {
+        if (data.error?.includes('Insufficient balance')) {
+          toast.error(`Insufficient balance: ${data.error}`);
+          return;
+        }
+        throw new Error(data.error || 'Failed to create contract');
+      }
+  
+      toast.success('Contract created successfully');
+      setPrivateKey('');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create contract');
+    } finally {
+      setIsProcessingContract(false);
+    }
+  };
 
   const calculateMilliseconds = (value: number, unit: TimeUnit): number => {
     const milliseconds = {
@@ -90,41 +183,6 @@ export default function ContractsCreate() {
     return value * milliseconds[unit];
   };
 
-  const handleCreateContract = async () => {
-    try {
-      if (!user?.publicKey || !token) {
-        throw new Error('Please login first');
-      }
-
-      const response = await fetch('http://localhost:2223/contract', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          creator: user.publicKey,
-          participants: formData.participants,
-          amount: formData.amount,
-          interval: formData.interval,
-          endDate: new Date(formData.endDate).getTime(),
-          type: formData.type,
-          terms: formData.terms,
-          metadata: formData.metadata
-        })
-      });
-
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to create contract');
-      }
-
-      toast.success('Contract created successfully');
-      // Reset form or redirect
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create contract');
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -300,18 +358,23 @@ export default function ContractsCreate() {
 
                 {/* Recipient Section */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Recipient</Label>
+                  <Label className="text-sm font-medium">Recipient Phone Number</Label>
                   <div className="relative">
                     <Input 
-                      placeholder="Enter recipient's public key"
-                      className="pl-10 transition-all hover:border-primary/50"
-                      value={formData.participants[0] || ''}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        participants: [e.target.value]
-                      })}
+                      placeholder="Enter recipient's phone number"
+                      className="pl-10"
+                      value={recipientPhone}
+                      onChange={(e) => setRecipientPhone(e.target.value)}
+                      onBlur={() => {
+                        if (recipientPhone) {
+                          lookupRecipient(recipientPhone);
+                        }
+                      }}
                     />
                     <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    {isLoadingRecipient && (
+                      <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin" />
+                    )}
                   </div>
                 </div>
 
@@ -391,22 +454,37 @@ export default function ContractsCreate() {
                     )}
 
                     <div className="pt-4 border-t">
-                      <div className="text-sm text-muted-foreground mb-2">Participants</div>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
-                          <div className="bg-primary/10 text-primary rounded px-2 py-1">Creator</div>
-                          <code className="text-xs">
-                            {user?.publicKey ? `${user.publicKey.slice(0, 8)}...${user.publicKey.slice(-8)}` : '-'}
-                          </code>
+                      <div className="text-sm text-muted-foreground mb-2">Contract Participants</div>
+                      <div className="space-y-4">
+                        <div className="p-3 rounded-lg border bg-muted/50">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="bg-primary/10 text-primary rounded px-2 py-1 text-sm">Creator</div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-sm">{user?.phoneNumber}</div>
+                            <code className="text-xs text-muted-foreground">
+                              {user?.publicKey ? `${user.publicKey.slice(0, 8)}...${user.publicKey.slice(-8)}` : '-'}
+                            </code>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <div className="bg-primary/10 text-primary rounded px-2 py-1">Recipient</div>
-                          <code className="text-xs">
-                            {formData.participants[0] 
-                              ? `${formData.participants[0].slice(0, 8)}...${formData.participants[0].slice(-8)}`
-                              : '-'
-                            }
-                          </code>
+
+                        <div className="p-3 rounded-lg border bg-muted/50">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="bg-primary/10 text-primary rounded px-2 py-1 text-sm">Recipient</div>
+                          </div>
+                          {formData.recipientDetails ? (
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium">@{formData.recipientDetails.username}</div>
+                              <div className="text-sm">{formData.recipientDetails.phoneNumber}</div>
+                              <code className="text-xs text-muted-foreground">
+                                {`${formData.recipientDetails.publicKey.slice(0, 8)}...${formData.recipientDetails.publicKey.slice(-8)}`}
+                              </code>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-muted-foreground">
+                              No recipient selected
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -424,17 +502,72 @@ export default function ContractsCreate() {
                 </>
               )}
             </div>
-            
-            <div className="mt-6">
+
+            <div className="mt-6 space-y-4 border-t pt-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Private Key</Label>
+                <Textarea
+                  placeholder="Enter your private key"
+                  value={privateKey}
+                  onChange={(e) => setPrivateKey(e.target.value)}
+                  className="font-mono text-xs min-h-[100px]"
+                />
+                <div className="relative">
+                  <Input
+                    type="file"
+                    accept=".txt"
+                    className="hidden"
+                    id="key-file"
+                    onChange={async (e) => {
+                      try {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        
+                        const text = await file.text();
+                        setPrivateKey(text.trim());
+                        toast.success('Private key loaded successfully');
+                      } catch (error: any) {
+                        toast.error('Failed to load private key file');
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => document.getElementById('key-file')?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Key File
+                  </Button>
+                </div>
+              </div>
+              
               <Button 
                 className="w-full bg-gradient-to-r from-primary to-primary/80"
                 onClick={handleCreateContract}
-                disabled={!formData.metadata?.title || !formData.amount || !formData.participants[0]}
+                disabled={
+                  !formData.metadata?.title || 
+                  !formData.amount || 
+                  !formData.participants[0] || 
+                  !privateKey ||
+                  isProcessingContract
+                }
               >
-                <FileText className="mr-2 h-4 w-4" />
-                Create Contract
+                {isProcessingContract ? (
+                  <>
+                    <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Contract...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Create Contract
+                  </>
+                )}
               </Button>
             </div>
+            
+
           </CardContent>
         </Card>
       </div>

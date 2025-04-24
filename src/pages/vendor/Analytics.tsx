@@ -21,9 +21,12 @@ interface Transaction {
   blockHeight: number;
 }
 
+// Update the timeframe type to include more intervals
+type TimeframeType = '30min' | 'hour' | '6hours' | '24hours' | 'week' | 'month' | 'quarter';
+
 export default function VendorAnalytics() {
   const { user, token } = useAuth();
-  const [timeframe, setTimeframe] = useState<'day' | 'week'>('day');
+  const [timeframe, setTimeframe] = useState<TimeframeType>('24hours');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,77 +72,188 @@ export default function VendorAnalytics() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const hourlyData = Array.from({ length: 24 }).map((_, hour) => {
-    const hourTransactions = transactions.filter((tx) => {
-      const txHour = new Date(tx.timestamp).getHours();
-      const txDate = new Date(tx.timestamp).setHours(0, 0, 0, 0);
-      const today = new Date().setHours(0, 0, 0, 0);
-      return txHour === hour && txDate === today;
-    });
+  // Add data generation for different timeframes
+  const generateTimeframeData = useCallback(() => {
+    const now = Date.now();
+    
+    switch(timeframe) {
+      case '30min':
+        return Array.from({ length: 6 }).map((_, index) => {
+          const minutesAgo = now - (5 - index) * 5 * 60 * 1000;
+          const relevantTxs = transactions.filter(tx => 
+            tx.timestamp > minutesAgo && 
+            tx.timestamp <= minutesAgo + 5 * 60 * 1000
+          );
+          return {
+            time: new Date(minutesAgo).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            amount: relevantTxs.reduce((sum, tx) => 
+              sum + (tx.type === 'RECEIVED' ? tx.amount : 0), 0
+            )
+          };
+        });
 
-    const amount = hourTransactions.reduce(
-      (sum, tx) => sum + (tx.type === 'RECEIVED' ? tx.amount : 0),
-      0
-    );
+      case 'hour':
+        return Array.from({ length: 12 }).map((_, index) => {
+          const minutesAgo = now - (11 - index) * 5 * 60 * 1000;
+          const relevantTxs = transactions.filter(tx => 
+            tx.timestamp > minutesAgo && 
+            tx.timestamp <= minutesAgo + 5 * 60 * 1000
+          );
+          return {
+            time: new Date(minutesAgo).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            amount: relevantTxs.reduce((sum, tx) => 
+              sum + (tx.type === 'RECEIVED' ? tx.amount : 0), 0
+            )
+          };
+        });
 
-    return {
-      time: `${hour.toString().padStart(2, '0')}:00`,
-      amount,
-    };
-  });
+      case '6hours':
+        return Array.from({ length: 12 }).map((_, index) => {
+          const hoursAgo = now - (11 - index) * 30 * 60 * 1000;
+          const relevantTxs = transactions.filter(tx => 
+            tx.timestamp > hoursAgo && 
+            tx.timestamp <= hoursAgo + 30 * 60 * 1000
+          );
+          return {
+            time: new Date(hoursAgo).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            amount: relevantTxs.reduce((sum, tx) => 
+              sum + (tx.type === 'RECEIVED' ? tx.amount : 0), 0
+            )
+          };
+        });
 
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const weeklyData = weekDays.map((day) => {
-    const dayTransactions = transactions.filter((tx) => {
-      const txDate = new Date(tx.timestamp);
-      const lastWeek = new Date();
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      return weekDays[txDate.getDay()] === day && txDate > lastWeek;
-    });
+      case '24hours':
+        return Array.from({ length: 24 }).map((_, hour) => {
+          const todayStart = new Date().setHours(0, 0, 0, 0);
+          const hourStart = todayStart + hour * 60 * 60 * 1000;
+          const relevantTxs = transactions.filter(tx => 
+            tx.timestamp >= hourStart && 
+            tx.timestamp < hourStart + 60 * 60 * 1000
+          );
+          return {
+            time: `${hour.toString().padStart(2, '0')}:00`,
+            amount: relevantTxs.reduce((sum, tx) => 
+              sum + (tx.type === 'RECEIVED' ? tx.amount : 0), 0
+            )
+          };
+        });
 
-    const amount = dayTransactions.reduce(
-      (sum, tx) => sum + (tx.type === 'RECEIVED' ? tx.amount : 0),
-      0
-    );
+      case 'week':
+        const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        return weekDays.map(day => {
+          const dayTxs = transactions.filter(tx => {
+            const txDate = new Date(tx.timestamp);
+            const lastWeek = new Date(now - 7 * 24 * 60 * 60 * 1000);
+            return weekDays[txDate.getDay()] === day && txDate > lastWeek;
+          });
+          return {
+            time: day,
+            amount: dayTxs.reduce((sum, tx) => 
+              sum + (tx.type === 'RECEIVED' ? tx.amount : 0), 0
+            )
+          };
+        });
 
-    return {
-      time: day,
-      amount,
-    };
-  });
+      case 'month':
+        return Array.from({ length: 30 }).map((_, index) => {
+          const dayStart = new Date(now - (29 - index) * 24 * 60 * 60 * 1000);
+          const relevantTxs = transactions.filter(tx => {
+            const txDate = new Date(tx.timestamp);
+            return txDate.toDateString() === dayStart.toDateString();
+          });
+          return {
+            time: dayStart.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            amount: relevantTxs.reduce((sum, tx) => 
+              sum + (tx.type === 'RECEIVED' ? tx.amount : 0), 0
+            )
+          };
+        });
+
+      case 'quarter':
+        return Array.from({ length: 13 }).map((_, index) => {
+          const weekStart = new Date(now - (12 - index) * 7 * 24 * 60 * 60 * 1000);
+          const relevantTxs = transactions.filter(tx => {
+            const txDate = new Date(tx.timestamp);
+            return txDate >= weekStart && 
+                   txDate < new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+          });
+          return {
+            time: `Week ${index + 1}`,
+            amount: relevantTxs.reduce((sum, tx) => 
+              sum + (tx.type === 'RECEIVED' ? tx.amount : 0), 0
+            )
+          };
+        });
+    }
+  }, [timeframe, transactions]);
 
   return (
     <div className="space-y-6">
       <Card className="pt-4 px-2 sm:pt-8 sm:-pl-8 sm:pr-16">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 sm:pb-8">
-          <CardTitle className="text-lg font-medium pt-0 pl-4 sm:pl-16 mb-4 sm:mb-0">
+        <div className="flex flex-col gap-4 sm:flex-row justify-between items-start sm:items-center pb-4 sm:pb-8">
+          <CardTitle className="text-lg font-medium pt-0 pl-4 sm:pl-16">
             {isLoading ? 'Loading...' : 'Transaction Analytics'}
           </CardTitle>
-          <div className="space-x-2 w-full sm:w-auto px-4 flex justify-end">
+          <div className="grid grid-cols-4 sm:flex gap-2 w-full sm:w-auto px-4">
             <Button
-              variant={timeframe === 'day' ? 'default' : 'outline'}
-              onClick={() => setTimeframe('day')}
-              className="flex-1 sm:flex-none"
+              variant={timeframe === '30min' ? 'default' : 'outline'}
+              onClick={() => setTimeframe('30min')}
+              className="text-xs sm:text-sm"
             >
-              Today
+              30m
+            </Button>
+            <Button
+              variant={timeframe === 'hour' ? 'default' : 'outline'}
+              onClick={() => setTimeframe('hour')}
+              className="text-xs sm:text-sm"
+            >
+              1h
+            </Button>
+            <Button
+              variant={timeframe === '6hours' ? 'default' : 'outline'}
+              onClick={() => setTimeframe('6hours')}
+              className="text-xs sm:text-sm"
+            >
+              6h
+            </Button>
+            <Button
+              variant={timeframe === '24hours' ? 'default' : 'outline'}
+              onClick={() => setTimeframe('24hours')}
+              className="text-xs sm:text-sm"
+            >
+              24h
             </Button>
             <Button
               variant={timeframe === 'week' ? 'default' : 'outline'}
               onClick={() => setTimeframe('week')}
-              className="flex-1 sm:flex-none"
+              className="text-xs sm:text-sm"
             >
-              This Week
+              1w
+            </Button>
+            <Button
+              variant={timeframe === 'month' ? 'default' : 'outline'}
+              onClick={() => setTimeframe('month')}
+              className="text-xs sm:text-sm"
+            >
+              1m
+            </Button>
+            <Button
+              variant={timeframe === 'quarter' ? 'default' : 'outline'}
+              onClick={() => setTimeframe('quarter')}
+              className="text-xs sm:text-sm"
+            >
+              3m
             </Button>
           </div>
         </div>
         <ResponsiveContainer width="100%" height={isMobile ? 170 : 280}>
           <BarChart
-            data={timeframe === 'day' ? hourlyData : weeklyData}
+            data={generateTimeframeData()}
             margin={{ left: isMobile ? 10 : 30, right: 10, bottom: 20, top: 10 }}
           >
             <XAxis dataKey="time" axisLine={true} tickLine={false}>
               <Label
-                value={timeframe === 'day' ? 'Time of Day' : 'Day of Week'}
+                value={timeframe === '24hours' ? 'Time of Day' : 'Day of Week'}
                 position="bottom"
                 offset={0}
                 style={{

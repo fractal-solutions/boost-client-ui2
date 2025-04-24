@@ -37,6 +37,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { Label } from '@/components/ui/label';
 import { OnlyBalance } from './Balance';
 import { getBalance } from '@/services/balance';
+import { getFullUserDetails } from '@/services/users';
 
 interface CartItem {
   id: string;
@@ -52,8 +53,19 @@ interface PurchaseHistory {
   items: CartItem[];
   total: number;
   timestamp: number;
+  purchaseId: string;
   transactionId?: string;
-  paymentRequestStatus?: 'pending' | 'completed' | 'failed';
+  paymentStatus: 'pending' | 'completed' | 'failed';
+  transaction?: {
+    blockHeight?: number;
+    timestamp: number;
+    userId: string;
+  };
+  customerDetails?: {
+    phoneNumber: string;
+    username: string;
+    publicKey: string;
+  };
 }
 
 interface Transaction {
@@ -65,15 +77,43 @@ interface Transaction {
   blockHeight: number;
 }
 
-const getPurchaseHistoryKey = (publicKey: string) => `purchase_history_${publicKey}`;
+const getPurchaseHistoryKey = (publicKey: string) => {
+  // Clean the key first
+  const cleanKey = publicKey
+    .replace(/\r?\n|\r/g, '')
+    .replace('-----BEGIN PUBLIC KEY-----', '')
+    .replace('-----END PUBLIC KEY-----', '')
+    .trim();
+
+  // Get a slice from the middle of the key
+  const startIndex = Math.floor(cleanKey.length / 3); // Start at 1/3rd of the key
+  const keySlice = cleanKey.slice(startIndex, startIndex + 16);
+
+  return `purchase_history_${keySlice}`;
+};
 
 const savePurchaseHistory = (publicKey: string, history: PurchaseHistory[]) => {
-  localStorage.setItem(getPurchaseHistoryKey(publicKey), JSON.stringify(history));
+  try {
+    const key = getPurchaseHistoryKey(publicKey);
+    // Limit history size to prevent quota issues
+    const limitedHistory = history.slice(0, 100); // Keep only last 100 records
+    localStorage.setItem(key, JSON.stringify(limitedHistory));
+  } catch (error) {
+    //console.error('Failed to save purchase history:', error);
+    // Optionally show toast notification
+    toast.error('Failed to save purchase history');
+  }
 };
 
 const loadPurchaseHistory = (publicKey: string): PurchaseHistory[] => {
-  const stored = localStorage.getItem(getPurchaseHistoryKey(publicKey));
-  return stored ? JSON.parse(stored) : [];
+  try {
+    const key = getPurchaseHistoryKey(publicKey);
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    toast.error(`Failed to load purchase history:` + error);
+    return [];
+  }
 };
 
 const undoPurchase = (publicKey: string, purchase: PurchaseHistory) => {
@@ -237,15 +277,22 @@ export default function VendorPOS() {
     if (!user?.phoneNumber || cart.length === 0 || !userPhoneNumber) return;
   
     try {
-      console.log('Sending payment request to:', userPhoneNumber);
+      // Get full user details including username
+      const userData = await getFullUserDetails(userPhoneNumber.trim());
       
-      // Create the purchase record first
+      // Create the purchase record first with pending status
       const purchase: PurchaseHistory = {
         id: Date.now().toString(),
         items: [...cart],
         total: totalAmount,
         timestamp: Date.now(),
-        paymentRequestStatus: 'pending'
+        paymentStatus: 'pending',
+        purchaseId: Date.now().toString(),
+        customerDetails: {
+          phoneNumber: userData.phoneNumber,
+          username: userData.username,
+          publicKey: userData.publicKey
+        }
       };
   
       // Send the payment request
@@ -253,10 +300,10 @@ export default function VendorPOS() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: userPhoneNumber.trim(), // Remove any whitespace
+          userId: userPhoneNumber.trim(),
           vendorId: user.phoneNumber,
           amount: totalAmount,
-          purchaseId: purchase.id
+          purchaseId: purchase.purchaseId
         })
       });
   
@@ -265,18 +312,16 @@ export default function VendorPOS() {
         throw new Error(error || 'Failed to send payment request');
       }
   
-      // Save the purchase to history
+      // Save the pending purchase to history
       setPurchaseHistory(prev => {
         const updated = [purchase, ...prev];
         savePurchaseHistory(user.publicKey, updated);
         return updated;
       });
   
-      // Update inventory
-      updateInventoryAfterPurchase();
       setCart([]);
       setShowPaymentRequestDialog(false);
-      toast.success('Payment request sent and purchase recorded');
+      toast.success('Payment request sent');
     } catch (error) {
       console.error('Payment request error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to send payment request');
@@ -298,7 +343,9 @@ export default function VendorPOS() {
       id: Date.now().toString(),
       items: [...cart],
       total: pendingAmount,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      paymentStatus: 'pending',
+      purchaseId: Date.now().toString()
     };
 
     setPurchaseHistory(prev => {
@@ -399,12 +446,107 @@ export default function VendorPOS() {
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'payment-complete') {
-        toast.success(`Payment of KES ${data.data.amount} received from ${data.data.userId}`);
-        fetchRecentTransactions();
-        fetchBalance();
+        const { userId, amount, status, purchaseId } = data.data;
+  
+        console.log('Payment completion received:', data.data);
+  
+        // Update purchase history status and handle inventory
+        setPurchaseHistory(prev => {
+          const updated = prev.map(purchase => {
+            if (purchase.purchaseId === purchaseId) {
+              // If payment successful, update inventory
+              if (status === 'success' && user?.publicKey) {
+                updateInventoryForPurchase(purchase.items);
+              }
+  
+              return {
+                ...purchase,
+                paymentStatus: status === 'success' ? 'completed' as const : 'failed' as const,
+                transaction: status === 'success' ? {
+                  timestamp: Date.now(),
+                  userId
+                } : undefined
+              };
+            }
+            return purchase;
+          });
+          
+          // Save updated history to local storage
+          if (user?.publicKey) {
+            savePurchaseHistory(user.publicKey, updated);
+          }
+          
+          return updated;
+        });
+  
+        // Show appropriate notification and update UI
+        if (status === 'success') {
+          toast.success(`Payment of KES ${amount} received from ${userId}`);
+          fetchRecentTransactions();
+          fetchBalance();
+        } else {
+          toast.error(`Payment failed from ${userId}`);
+        }
+      } else if (data.type === 'payment-error') {
+        // Handle payment error type explicitly
+        const { userId, purchaseId } = data.data || {};
+        
+        // Update purchase history to mark as failed
+        setPurchaseHistory(prev => {
+          const updated = prev.map(purchase => {
+            if (purchase.purchaseId === purchaseId) {
+              return {
+                ...purchase,
+                paymentStatus: 'failed' as const,
+                transaction: undefined
+              };
+            }
+            return purchase;
+          });
+          
+          if (user?.publicKey) {
+            savePurchaseHistory(user.publicKey, updated);
+          }
+          
+          return updated;
+        });
+  
+        toast.error(`Payment failed${userId ? ` from ${userId}` : ''}`);
       }
     };
-  }, [socket, fetchRecentTransactions, fetchBalance]);
+  }, [socket, fetchRecentTransactions, fetchBalance, user?.publicKey]);
+
+  const updateInventoryForPurchase = (items: CartItem[]) => {
+    if (!user?.publicKey) return;
+  
+    const updatedInventory = inventory.map(item => {
+      const purchaseItem = items.find(pi => pi.id === item.id);
+      if (purchaseItem) {
+        return {
+          ...item,
+          quantity: item.quantity - purchaseItem.quantity,
+          lastUpdated: Date.now(),
+          stockHistory: [
+            ...item.stockHistory,
+            {
+              id: Date.now().toString(),
+              type: 'OUT' as const,
+              quantity: purchaseItem.quantity,
+              date: Date.now(),
+              reason: 'Sale',
+              sale: {
+                price: purchaseItem.sellingPrice,
+                receipt: Date.now().toString()
+              }
+            }
+          ]
+        };
+      }
+      return item;
+    });
+  
+    saveInventoryToStorage(user.publicKey, updatedInventory);
+  };
 
   return (
     <div className="space-y-6">
@@ -660,19 +802,43 @@ export default function VendorPOS() {
                       >
                         <ScrollArea className="h-[400px]">
                           <div className="p-4 space-y-4">
-                            {purchaseHistory.map(purchase => (
-                              <div 
-                                key={purchase.id}
-                                className="border rounded-lg p-4 space-y-2"
-                              >
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <div className="font-medium">
-                                      KES {purchase.total.toLocaleString()}
+                          {purchaseHistory.map(purchase => (
+                            <div 
+                              key={purchase.id}
+                              className="border rounded-lg p-4 space-y-2"
+                            >
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <div className="font-medium">
+                                    KES {purchase.total.toLocaleString()}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {new Date(purchase.timestamp).toLocaleString()}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Badge variant={
+                                      purchase.paymentStatus === 'completed' ? 'default' :
+                                      purchase.paymentStatus === 'pending' ? 'secondary' : 
+                                      'destructive'
+                                    }>
+                                      {purchase.paymentStatus}
+                                    </Badge>
+                                    {purchase.transaction && (
+                                      <>
+                                        <span className="text-xs text-muted-foreground">
+                                          Block #{purchase.transaction.blockHeight}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          From: {purchase.transaction.userId}
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+                                  {purchase.transactionId && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      Transaction ID: {purchase.transactionId.slice(0, 8)}...
                                     </div>
-                                    <div className="text-sm text-muted-foreground">
-                                      {new Date(purchase.timestamp).toLocaleString()}
-                                    </div>
+                                  )}
                                   </div>
                                   <div className="flex gap-2">
                                     <Button
