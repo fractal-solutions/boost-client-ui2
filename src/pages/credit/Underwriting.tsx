@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,11 @@ import { ClipboardList, CheckCircle, AlertCircle, Upload, Building2, UserRound }
 export default function CreditUnderwriting() {
   const [step, setStep] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [govId, setGovId] = useState<File | null>(null);
+  const [registration, setRegistration] = useState<File | null>(null);
+  const [bankStatements, setBankStatements] = useState<File | null>(null);
+  const [bankStatementsPassword, setBankStatementsPassword] = useState<string>("");
+  const [hasPassword, setHasPassword] = useState(false);
 
   const totalSteps = 3;
   const progress = (step / totalSteps) * 100;
@@ -56,37 +61,194 @@ export default function CreditUnderwriting() {
     </div>
   );
 
-  const DocumentUploadForm = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <Label>Government ID</Label>
-        <div className="border-2 border-dashed rounded-lg p-6 text-center">
-          <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Upload a clear photo of your ID
-          </p>
+  const DocumentUploadForm = () => {
+    const handleFileUpload = async (file: File, type: 'govId' | 'registration' | 'bankStatements') => {
+      if (type === 'govId' && !file.type.startsWith('image/')) {
+        alert('Please upload an image file for Government ID');
+        return;
+      }
+      if ((type === 'registration' || type === 'bankStatements') && file.type !== 'application/pdf') {
+        alert('Please upload a PDF file');
+        return;
+      }
+
+      switch (type) {
+        case 'govId': setGovId(file); break;
+        case 'registration': setRegistration(file); break;
+        case 'bankStatements': setBankStatements(file); break;
+      }
+    };
+
+    const handleSubmit = async () => {
+      if (!govId || !registration || !bankStatements) {
+        alert('Please upload all required documents');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('govId', govId);
+      formData.append('registration', registration);
+      formData.append('bankStatements', bankStatements);
+      if (hasPassword && bankStatementsPassword) {
+        formData.append('bankStatementsPassword', bankStatementsPassword);
+      }
+
+      try {
+        const response = await fetch('http://localhost:5678/webhook-test/655ed40e-d08e-4124-91f6-d82cf637ff62', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!response.ok) throw new Error('Upload failed');
+        alert('Documents uploaded successfully');
+      } catch (error) {
+        alert('Error uploading documents');
+        console.error(error);
+      }
+    };
+
+    // Add a ref for the password input
+    const passwordInputRef = useRef<HTMLInputElement>(null);
+    
+    // Use useEffect to force focus back to the input on every render if hasPassword is true
+    useEffect(() => {
+      if (hasPassword && passwordInputRef.current) {
+        // Set a timeout to ensure focus happens after any other potential focus events
+        const timeoutId = setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 0);
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }, [hasPassword, bankStatementsPassword]);
+
+    // Create a special handler for the password input that prevents event bubbling
+    const handlePasswordInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setBankStatementsPassword(e.target.value);
+      
+      // Ensure the cursor position is maintained
+      const cursorPosition = e.target.selectionStart;
+      setTimeout(() => {
+        if (passwordInputRef.current) {
+          passwordInputRef.current.selectionStart = cursorPosition;
+          passwordInputRef.current.selectionEnd = cursorPosition;
+        }
+      }, 0);
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Government ID</Label>
+            <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50"
+                 onClick={() => document.getElementById('govId')?.click()}>
+              <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Upload ID (Image)</p>
+              <input
+                id="govId"
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'govId')}
+              />
+              {govId && <p className="text-xs text-green-600 mt-1">{govId.name}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Business Registration</Label>
+            <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50"
+                 onClick={() => document.getElementById('registration')?.click()}>
+              <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Upload Registration (PDF)</p>
+              <input
+                id="registration"
+                type="file"
+                className="hidden"
+                accept=".pdf"
+                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'registration')}
+              />
+              {registration && <p className="text-xs text-green-600 mt-1">{registration.name}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-2 col-span-2">
+            <Label>Bank Statements</Label>
+            <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50"
+                 onClick={() => document.getElementById('bankStatements')?.click()}>
+              <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Upload Statements (PDF)</p>
+              <input
+                id="bankStatements"
+                type="file"
+                className="hidden"
+                accept=".pdf"
+                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'bankStatements')}
+              />
+              {bankStatements && <p className="text-xs text-green-600 mt-1">{bankStatements.name}</p>}
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="space-y-4">
-        <Label>Business Registration</Label>
-        <div className="border-2 border-dashed rounded-lg p-6 text-center">
-          <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Upload business registration documents
-          </p>
+
+        <div className="border-t pt-4 mt-4">
+          <h4 className="text-sm font-medium mb-2">Additional Options</h4>
+          
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="checkbox"
+              id="hasPassword"
+              checked={hasPassword}
+              onChange={(e) => {
+                e.stopPropagation();
+                setHasPassword(e.target.checked);
+              }}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <label 
+              htmlFor="hasPassword" 
+              className="text-sm cursor-pointer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Bank statement PDF is password protected
+            </label>
+          </div>
+          
+          {hasPassword && (
+            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+              <label 
+                htmlFor="pdfPassword" 
+                className="block text-sm font-medium mb-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Enter PDF password:
+              </label>
+              <input
+                ref={passwordInputRef}
+                id="pdfPassword"
+                type="text"
+                value={bankStatementsPassword}
+                onChange={handlePasswordInputChange}
+                onKeyDown={(e) => e.stopPropagation()}
+                onKeyUp={(e) => e.stopPropagation()}
+                onFocus={(e) => e.stopPropagation()}
+                onBlur={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full h-9 px-3 py-1 border border-gray-300 rounded-md"
+                autoFocus
+              />
+            </div>
+          )}
         </div>
+
+        <Button className="w-full mt-4" onClick={handleSubmit}>
+          Upload Documents
+        </Button>
       </div>
-      <div className="space-y-4">
-        <Label>Bank Statements</Label>
-        <div className="border-2 border-dashed rounded-lg p-6 text-center">
-          <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Upload last 6 months statements
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const steps = [
     {
@@ -160,7 +322,7 @@ export default function CreditUnderwriting() {
                       </div>
                       <Progress value={progress} />
                     </div>
-                    <div className="h-full overflow-auto scrollbar-none overflow-y-hidden">
+                    <div className="h-full overflow-auto scrollbar-none overflow-y-auto pb-20 mb-12 px-2">
                       {steps[step - 1].component}
                     </div>
                   </div>
