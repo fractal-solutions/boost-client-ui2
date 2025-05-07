@@ -81,6 +81,53 @@ export async function makeWithdrawal(
     }
 }
 
+// export async function sendTransaction(
+//     senderPublicKey: string,
+//     senderPrivateKey: string,
+//     recipientPublicKey: string,
+//     amount: number,
+//     token: string
+// ) {
+//     try {
+//         // Format the public key if needed
+//         const formattedRecipientKey = formatPublicKey(recipientPublicKey);
+        
+//         const response = await fetch('http://localhost:2222/txn', {
+//             method: 'POST',
+//             headers: {
+//                 'Content-Type': 'application/json',
+//                 'Authorization': `Bearer ${token}`,
+//                 'x-auth-token': NETWORK_SECRET || ''
+//             },
+//             body: JSON.stringify({
+//                 from: {
+//                     publicKey: senderPublicKey,
+//                     privateKey: senderPrivateKey
+//                 },
+//                 to: formattedRecipientKey,  // Send just the formatted key
+//                 amount: Number(amount),
+//                 type: "TRANSFER",
+//                 timestamp: Date.now()
+//             })
+//         });
+
+//         const data = await response.json();
+        
+//         if (!response.ok) {
+//             console.error('Transaction error:', data);
+//             throw new Error(data.error || 'Transaction failed');
+//         }
+
+//         // Wait for transaction to be processed
+//         await new Promise(resolve => setTimeout(resolve, 2000));
+        
+//         return data.message || 'Transaction successful';
+//     } catch (error) {
+//         console.error('Send transaction error:', error);
+//         throw error;
+//     }
+// }
+
 export async function sendTransaction(
     publicKey: string,
     privateKey: string,
@@ -97,10 +144,10 @@ export async function sendTransaction(
       },
       body: JSON.stringify({
         from: {
-            publicKey: publicKey,
+            publicKey: formatPublicKey(publicKey),
             privateKey: privateKey
         },
-        to: to,
+        to: formatPublicKey(to),
         amount: amount,
         type: 'TRANSFER'
       })

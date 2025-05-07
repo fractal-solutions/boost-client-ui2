@@ -58,6 +58,13 @@ interface AccountStats {
   lastSeen: number | null;
 }
 
+interface FrequentContact {
+  publicKey: string;
+  username?: string;
+  phoneNumber: string;
+  transactionCount: number;
+}
+
 const readPrivateKeyFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -77,12 +84,6 @@ const readPrivateKeyFile = (file: File): Promise<string> => {
     reader.readAsText(file);
   });
 };
-
-const quickContacts = [
-  { id: 1, name: 'John Doe', phone: '+254 712 345 678' },
-  { id: 2, name: 'Jane Smith', phone: '+254 723 456 789' },
-  { id: 3, name: 'Alice Johnson', phone: '+254 734 567 890' },
-];
 
 const quickAmounts = [
   { value: "100", label: "KES 100" },
@@ -146,6 +147,8 @@ export default function Dashboard() {
   const [isProcessingWithdraw, setIsProcessingWithdraw] = useState(false);
   const [isProcessingWithdrawConfirm, setIsProcessingWithdrawConfirm] = useState(false);
   const [isProcessingSend, setIsProcessingSend] = useState(false);
+  const [frequentContacts, setFrequentContacts] = useState<FrequentContact[]>([]);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
 
   const fetchBalance = useCallback(async () => {
@@ -356,13 +359,18 @@ export default function Dashboard() {
       setShowConfirmation(false);
       setRecipientDetails(null);
       setShowSendForm(false);
-      fetchBalance();
+
+      //await new Promise(resolve => setTimeout(resolve, 1000));
+      await fetchBalance();
     } catch (error: any) {
+      console.error('Send error:', error);  
       toast.error(error.message || 'Transaction failed');
     } finally {
       setIsProcessingSend(false);
     }
   };
+
+
   const handleSendMoney = async () => {
     try {
       if (!user?.publicKey || !token) {
@@ -457,6 +465,65 @@ export default function Dashboard() {
     }
   };
 
+  const processFrequentContacts = useCallback(async () => {
+    if (!recentTransactions.length) return;
+    
+    // Create a map to count transactions per contact
+    const contactMap = new Map<string, { count: number; publicKey: string }>();
+    
+    // Count transactions for each unique contact
+    recentTransactions.forEach(tx => {
+      if (tx.counterparty) {
+        const key = tx.counterparty;
+        const current = contactMap.get(key) || { count: 0, publicKey: key };
+        contactMap.set(key, { ...current, count: current.count + 1 });
+      }
+    });
+
+    // Convert to array and sort by frequency
+    const sortedContacts = Array.from(contactMap.entries())
+      .sort(([, a], [, b]) => b.count - a.count)
+      .slice(0, 5); // Take top 5 contacts
+
+    // Fetch user details for each contact
+    setIsLoadingContacts(true);
+    try {
+      const contactDetails = await Promise.all(
+        sortedContacts.map(async ([, data]) => {
+          try {
+            const response = await fetch('http://localhost:2225/user/by-public-key', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ publicKey: data.publicKey })
+            });
+            const result = await response.json();
+            if (result.success) {
+              return {
+                publicKey: data.publicKey,
+                username: result.data.username,
+                phoneNumber: result.data.phoneNumber,
+                transactionCount: data.count
+              };
+            }
+            return null;
+          } catch (error) {
+            console.error('Error fetching contact details:', error);
+            return null;
+          }
+        })
+      );
+
+      setFrequentContacts(contactDetails.filter((contact): contact is FrequentContact => contact !== null && contact.username !== undefined) as FrequentContact[]);
+    } catch (error) {
+      console.error('Error processing frequent contacts:', error);
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  }, [recentTransactions]);
+
+  useEffect(() => {
+    processFrequentContacts();
+  }, [processFrequentContacts]);
 
   const PrivateKeyActivation = () => (
     <Popover>
@@ -686,12 +753,38 @@ export default function Dashboard() {
                     <CommandList>
                       <CommandEmpty>No recipients found.</CommandEmpty>
                       <CommandGroup heading="Frequent Contacts">
-                        {quickContacts.map((contact) => (
-                          <CommandItem key={contact.id} className="flex justify-between">
-                            <span>{contact.name}</span>
-                            <span className="text-sm text-muted-foreground">{contact.phone}</span>
+                        {isLoadingContacts ? (
+                          <div className="flex items-center justify-center py-4">
+                            <RefreshCcw className="h-4 w-4 animate-spin mr-2" />
+                            <span>Loading contacts...</span>
+                          </div>
+                        ) : frequentContacts.length > 0 ? (
+                          frequentContacts.map((contact) => (
+                            <CommandItem
+                              key={contact.publicKey}
+                              className="flex justify-between cursor-pointer"
+                              onSelect={() => {
+                                setRecipientType('phone');
+                                setRecipientId(contact.phoneNumber);
+                                handleSendMoney();
+                              }}
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  {contact.username ? `@${contact.username}` : contact.phoneNumber}
+                                </span>
+                                <span className="text-sm text-muted-foreground">
+                                  {contact.transactionCount} transaction{contact.transactionCount !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+                              <span className="text-sm text-muted-foreground">{contact.phoneNumber}</span>
+                            </CommandItem>
+                          ))
+                        ) : (
+                          <CommandItem className="text-muted-foreground">
+                            No recent contacts found
                           </CommandItem>
-                        ))}
+                        )}
                       </CommandGroup>
                     </CommandList>
                   </Command>

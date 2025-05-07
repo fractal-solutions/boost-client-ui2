@@ -1,20 +1,28 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
+import { toast } from 'sonner';
 
 interface WebSocketContextType {
-  socket: WebSocket | null;
-  isConnected: boolean;
+  socketGeneral: WebSocket | null;
+  socketTransaction: WebSocket | null;
+  isConnectedGeneral: boolean;
+  isConnectedTransaction: boolean;
 }
 
 const WebSocketContext = createContext<WebSocketContextType>({
-  socket: null,
-  isConnected: false
+  socketGeneral: null,
+  socketTransaction: null,
+  isConnectedGeneral: false,
+  isConnectedTransaction: false,
 });
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [socketGeneral, setSocketGeneral] = useState<WebSocket | null>(null);
+  const [socketTransaction, setSocketTransaction] = useState<WebSocket | null>(null);
+  const [isConnectedGeneral, setIsConnectedGeneral] = useState(false);
+  const [isConnectedTransaction, setIsConnectedTransaction] = useState(false);
   const { user } = useAuth();
+
   
   useEffect(() => {
     if (!user?.phoneNumber) return;
@@ -23,34 +31,107 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const clientType = window.location.pathname.startsWith('/vendor') ? 'vendor' : 'user';
     console.log(`Connecting as ${clientType} with ID ${user.phoneNumber}`);
 
-    // Fix: Change 'type' to 'clientType' in the query parameter
-    const ws = new WebSocket(`ws://localhost:2225/ws?clientType=${clientType}&id=${user.phoneNumber}`);
-
-    ws.onopen = () => {
-      console.log('WebSocket Connected');
-      setIsConnected(true);
+    //const ws = new WebSocket(`ws://localhost:2225/ws?clientType=${clientType}&id=${user.phoneNumber}`);
+    const wsGeneral = new WebSocket(`ws://localhost:2225/ws?clientType=${clientType}&id=${user.phoneNumber}`);
+    
+    wsGeneral.onopen = () => {
+      console.log('General WebSocket Connected');
+      setIsConnectedGeneral(true);
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket Disconnected');
-      setIsConnected(false);
+    wsGeneral.onclose = () => {
+      console.log('General WebSocket Disconnected');
+      setIsConnectedGeneral(false);
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket Error:', error);
+    wsGeneral.onerror = (error) => {
+      console.error('General WebSocket Error:', error);
     };
 
-    setSocket(ws);
+    setSocketGeneral(wsGeneral);
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
+      if (wsGeneral.readyState === WebSocket.OPEN) {
+        wsGeneral.close();
       }
     };
   }, [user?.phoneNumber]);
 
+  useEffect(() => {
+    if (!user?.phoneNumber) return;
+
+    // Connect to the transaction WebSocket server (port 2222)
+    const wsTransaction = new WebSocket(`ws://localhost:2222/ws?clientType=user&id=${user.phoneNumber}`);
+    
+    wsTransaction.onopen = () => {
+      console.log('Transaction WebSocket Connected');
+      setIsConnectedTransaction(true);
+    };
+
+    wsTransaction.onclose = () => {
+      console.log('Transaction WebSocket Disconnected');
+      setIsConnectedTransaction(false);
+    };
+
+    wsTransaction.onerror = (error) => {
+      console.error('Transaction WebSocket Error:', error);
+    };
+
+    setSocketTransaction(wsTransaction);
+
+    return () => {
+      if (wsTransaction.readyState === WebSocket.OPEN) {
+        wsTransaction.close();
+      }
+    };
+  }, [user?.phoneNumber]);
+
+  useEffect(() => {
+    if (!socketGeneral) return;
+
+    const handleMessageGeneral = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('Received General WebSocket message:', data);
+
+        // Handle general messages here
+      } catch (error) {
+        console.error('Error handling General WebSocket message:', error);
+      }
+    };
+
+    socketGeneral.addEventListener('message', handleMessageGeneral);
+
+    return () => {
+      socketGeneral.removeEventListener('message', handleMessageGeneral);
+    };
+  }, [socketGeneral]);
+
+  useEffect(() => {
+    if (!socketTransaction) return;
+
+    const handleMessageTransaction = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('Received Transaction WebSocket message:', data);
+
+        if (data.type === 'transaction-notification') {
+          toast.success(`Transaction received: KES ${data.data.amount} from ${data.data.senderId}`);
+        }
+      } catch (error) {
+        console.error('Error handling Transaction WebSocket message:', error);
+      }
+    };
+
+    socketTransaction.addEventListener('message', handleMessageTransaction);
+
+    return () => {
+      socketTransaction.removeEventListener('message', handleMessageTransaction);
+    };
+  }, [socketTransaction]);
+
   return (
-    <WebSocketContext.Provider value={{ socket, isConnected }}>
+    <WebSocketContext.Provider value={{ socketGeneral, socketTransaction, isConnectedGeneral, isConnectedTransaction }}>
       {children}
     </WebSocketContext.Provider>
   );

@@ -248,7 +248,7 @@ export function NavigationMenuDemo() {
             <Home className="h-4 w-4 text-foreground" />
           </Link>
           <DropdownMenu>
-            <DropdownMenuTrigger className='bg-white dark:bg-black'>
+            <DropdownMenuTrigger className='bg-white dark:bg-black p-2'>
               <Settings className="h-4 w-4 cursor-pointer bg-white dark:bg-black" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
