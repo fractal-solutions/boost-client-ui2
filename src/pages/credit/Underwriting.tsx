@@ -40,26 +40,72 @@ export default function CreditUnderwriting() {
     </div>
   );
 
-  const BusinessDetailsForm = () => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="businessName">Business Name</Label>
-        <Input id="businessName" placeholder="Enter business name" />
+  const BusinessDetailsForm = () => {
+    const businessTypes = [
+      {
+        category: "High-Risk Industries",
+        types: [
+          "Hospitality & Tourism",
+          "Retail",
+          "Manufacturing",
+          "Oil & Gas"
+        ]
+      },
+      {
+        category: "Moderate-Risk Industries",
+        types: [
+          "Financial Services",
+          "Healthcare",
+          "Transportation & Logistics",
+          "Technology"
+        ]
+      },
+      {
+        category: "Low-Risk Industries",
+        types: [
+          "Utilities",
+          "Education",
+          "Government & Public Services",
+          "Agriculture"
+        ]
+      }
+    ];
+
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="businessName">Business Name</Label>
+          <Input id="businessName" placeholder="Enter business name" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="businessType">Business Type</Label>
+          <select
+            id="businessType"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">Select business type</option>
+            {businessTypes.map((group) => (
+              <optgroup key={group.category} label={group.category}>
+                {group.types.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="monthlyRevenue">Average Monthly Revenue</Label>
+          <Input id="monthlyRevenue" placeholder="Enter amount" type="number" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="yearsOperation">Years in Operation</Label>
+          <Input id="yearsOperation" placeholder="Number of years" type="number" />
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="businessType">Business Type</Label>
-        <Input id="businessType" placeholder="e.g. Retail, Services" />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="monthlyRevenue">Average Monthly Revenue</Label>
-        <Input id="monthlyRevenue" placeholder="Enter amount" type="number" />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="yearsOperation">Years in Operation</Label>
-        <Input id="yearsOperation" placeholder="Number of years" type="number" />
-      </div>
-    </div>
-  );
+    );
+  };
 
   const DocumentUploadForm = () => {
     const handleFileUpload = async (file: File, type: 'govId' | 'registration' | 'bankStatements') => {
