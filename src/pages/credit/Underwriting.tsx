@@ -15,6 +15,7 @@ export default function CreditUnderwriting() {
   const [bankStatements, setBankStatements] = useState<File | null>(null);
   const [bankStatementsPassword, setBankStatementsPassword] = useState<string>("");
   const [hasPassword, setHasPassword] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const totalSteps = 3;
   const progress = (step / totalSteps) * 100;
@@ -41,6 +42,7 @@ export default function CreditUnderwriting() {
   );
 
   const BusinessDetailsForm = () => {
+    const [years, setYears] = useState(0);
     const businessTypes = [
       {
         category: "High-Risk Industries",
@@ -97,11 +99,46 @@ export default function CreditUnderwriting() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="monthlyRevenue">Average Monthly Revenue</Label>
-          <Input id="monthlyRevenue" placeholder="Enter amount" type="number" />
+          <select
+            id="monthlyRevenue"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">Select revenue range</option>
+            <option value="below-50k">Below KES 50,000</option>
+            <option value="50k-100k">KES 50,000 - 100,000</option>
+            <option value="100k-250k">KES 100,000 - 250,000</option>
+            <option value="250k-500k">KES 250,000 - 500,000</option>
+            <option value="500k-1m">KES 500,000 - 1,000,000</option>
+            <option value="1m-5m">KES 1,000,000 - 5,000,000</option>
+            <option value="above-5m">Above KES 5,000,000</option>
+          </select>
         </div>
         <div className="space-y-2">
           <Label htmlFor="yearsOperation">Years in Operation</Label>
-          <Input id="yearsOperation" placeholder="Number of years" type="number" />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setYears(Math.max(0, years - 1))}
+              disabled={years <= 0}
+            >
+              -
+            </Button>
+            <Input
+              id="yearsOperation"
+              value={years}
+              onChange={(e) => setYears(Number(e.target.value))}
+              className="text-center w-20"
+              type="number"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setYears(years + 1)}
+            >
+              +
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -147,9 +184,11 @@ export default function CreditUnderwriting() {
         
         if (!response.ok) throw new Error('Upload failed');
         alert('Documents uploaded successfully');
+        setUploadSuccess(true);
       } catch (error) {
         alert('Error uploading documents');
         console.error(error);
+        setUploadSuccess(false);
       }
     };
 
@@ -349,7 +388,10 @@ export default function CreditUnderwriting() {
                 </div>
               </div>
               
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (!open) setUploadSuccess(false);
+              }}>
                 <DialogTrigger asChild>
                   <Button className="w-full">Continue Application</Button>
                 </DialogTrigger>
@@ -375,7 +417,10 @@ export default function CreditUnderwriting() {
                   <div className="flex justify-between mt-6 pt-4 border-t flex-none">
                     <Button
                       variant="outline"
-                      onClick={() => setStep(step > 1 ? step - 1 : step)}
+                      onClick={() => {
+                        setStep(step > 1 ? step - 1 : step);
+                        setUploadSuccess(false);
+                      }}
                       disabled={step === 1}
                     >
                       Previous
@@ -384,11 +429,13 @@ export default function CreditUnderwriting() {
                       onClick={() => {
                         if (step < totalSteps) {
                           setStep(step + 1);
+                          setUploadSuccess(false);
                         } else {
                           setIsDialogOpen(false);
                           setStep(1);
                         }
                       }}
+                      disabled={step === totalSteps && !uploadSuccess}
                     >
                       {step === totalSteps ? 'Submit' : 'Next'}
                     </Button>
