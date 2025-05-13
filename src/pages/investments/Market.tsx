@@ -21,6 +21,11 @@ const investments = [
     return: '+12.5%',
     trend: 'up',
     minAmount: 'KES 50,000',
+    demand: 75, // percentage of borrower threshold reached
+    supply: 60, // percentage of disbursement threshold reached
+    demandThreshold: 'KES 2,000,000',
+    supplyThreshold: 'KES 1,500,000',
+    currentSupply: 'KES 900,000'
   },
   {
     id: 2,
@@ -30,6 +35,11 @@ const investments = [
     return: '+8.2%',
     trend: 'up',
     minAmount: 'KES 100,000',
+    demand: 90,
+    supply: 45,
+    demandThreshold: 'KES 3,500,000',
+    supplyThreshold: 'KES 2,800,000',
+    currentSupply: 'KES 1,260,000'
   },
   {
     id: 3,
@@ -39,6 +49,11 @@ const investments = [
     return: '-5.1%',
     trend: 'down',
     minAmount: 'KES 25,000',
+    demand: 30,
+    supply: 80,
+    demandThreshold: 'KES 1,200,000',
+    supplyThreshold: 'KES 1,000,000',
+    currentSupply: 'KES 800,000'
   },
 ];
 
@@ -90,21 +105,48 @@ export default function InvestmentsMarket() {
                 )}
               </div>
             </CardHeader>
-            <CardContent className="flex-1 space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Risk Level</span>
-                  <span>{investment.risk}</span>
+            <CardContent className="flex-1">
+              <div className="flex gap-6">
+                {/* Left column - Vertical meters */}
+                <div className="flex items-end gap-2">
+                  <div className="flex flex-col items-center">
+                    <div className="text-xs text-muted-foreground mb-1">Demand</div>
+                    <div className="w-4 h-20 bg-gray-200 rounded-full overflow-hidden rotate-180">
+                      <div
+                        className="w-full bg-blue-500 rounded-full"
+                        style={{ height: `${investment.demand}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="text-xs text-muted-foreground mb-1">Supply</div>
+                    <div className="w-4 h-20 bg-gray-200 rounded-full overflow-hidden rotate-180">
+                      <div
+                        className="w-full bg-green-500 rounded-full"
+                        style={{ height: `${investment.supply}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Minimum Investment</span>
-                  <span>{investment.minAmount}</span>
+
+                {/* Right column - Investment details */}
+                <div className="flex-1 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Risk Level</span>
+                      <span>{investment.risk}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Minimum Investment</span>
+                      <span>{investment.minAmount}</span>
+                    </div>
+                  </div>
+                  <Button className="w-full bg-gradient-to-r from-primary to-primary/80">
+                    <TrendingUp className="mr-2 h-4 w-4" />
+                    Invest Now
+                  </Button>
                 </div>
               </div>
-              <Button className="w-full bg-gradient-to-r from-primary to-primary/80">
-                <TrendingUp className="mr-2 h-4 w-4" />
-                Invest Now
-              </Button>
             </CardContent>
           </Card>
         ))}
