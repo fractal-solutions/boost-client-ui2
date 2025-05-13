@@ -11,6 +11,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Search, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Label } from '@/components/ui/label';
 
 const investments = [
   {
@@ -21,8 +24,8 @@ const investments = [
     return: '+12.5%',
     trend: 'up',
     minAmount: 'KES 50,000',
-    demand: 75, // percentage of borrower threshold reached
-    supply: 60, // percentage of disbursement threshold reached
+    demand: 75,
+    supply: 60,
     demandThreshold: 'KES 2,000,000',
     supplyThreshold: 'KES 1,500,000',
     currentSupply: 'KES 900,000'
@@ -57,7 +60,18 @@ const investments = [
   },
 ];
 
+const quickInvestAmounts = [
+  { value: "50000", label: "KES 50,000" },
+  { value: "100000", label: "KES 100,000" },
+  { value: "250000", label: "KES 250,000" },
+  { value: "500000", label: "KES 500,000" },
+];
+
 export default function InvestmentsMarket() {
+  const [showInvestForm, setShowInvestForm] = useState(false);
+  const [selectedInvestment, setSelectedInvestment] = useState<typeof investments[0] | null>(null);
+  const [amount, setAmount] = useState('');
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4">
@@ -83,7 +97,7 @@ export default function InvestmentsMarket() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {investments.map((investment) => (
-          <Card key={investment.id} className="flex flex-col">
+          <Card key={investment.id} className="flex flex-col h-fit">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
@@ -107,7 +121,6 @@ export default function InvestmentsMarket() {
             </CardHeader>
             <CardContent className="flex-1">
               <div className="flex gap-6">
-                {/* Left column - Vertical meters */}
                 <div className="flex items-end gap-2">
                   <div className="flex flex-col items-center">
                     <div className="text-xs text-muted-foreground mb-1">Demand</div>
@@ -129,7 +142,6 @@ export default function InvestmentsMarket() {
                   </div>
                 </div>
 
-                {/* Right column - Investment details */}
                 <div className="flex-1 space-y-4">
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
@@ -141,12 +153,70 @@ export default function InvestmentsMarket() {
                       <span>{investment.minAmount}</span>
                     </div>
                   </div>
-                  <Button className="w-full bg-gradient-to-r from-primary to-primary/80">
+                  <Button 
+                    className="w-full bg-gradient-to-r from-primary to-primary/80"
+                    onClick={() => {
+                      setSelectedInvestment(investment);
+                      setShowInvestForm(!showInvestForm);
+                    }}
+                  >
                     <TrendingUp className="mr-2 h-4 w-4" />
                     Invest Now
                   </Button>
                 </div>
               </div>
+
+              {showInvestForm && selectedInvestment?.id === investment.id && (
+                <AnimatePresence>
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0, width:0 }}
+                    transition={{ duration: 0.3 }}
+                    className="overflow-hidden w-full"
+                  >
+                    <Card className="mt-4 w-full">
+                      <CardHeader>
+                        <CardTitle className="text-lg font-medium">
+                          Invest in {investment.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid gap-6">
+                        <div className="grid gap-4">
+                          <div className="grid grid-cols-2 gap-2">
+                            {quickInvestAmounts.map((amt) => (
+                              <Button
+                                key={amt.value}
+                                variant="outline"
+                                onClick={() => setAmount(amt.value)}
+                                className={amount === amt.value ? "border-primary" : ""}
+                              >
+                                {amt.label}
+                              </Button>
+                            ))}
+                          </div>
+                          <div className="grid gap-2">
+                            <div className="grid grid-cols-3 items-center gap-4">
+                              <Label htmlFor="invest-amount">Amount</Label>
+                              <Input
+                                id="invest-amount"
+                                className="col-span-2"
+                                placeholder="Enter amount"
+                                type="number"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <Button className="w-full">
+                            Confirm Investment
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </AnimatePresence>
+              )}
             </CardContent>
           </Card>
         ))}
