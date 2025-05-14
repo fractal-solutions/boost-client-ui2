@@ -235,7 +235,7 @@ export function NavigationMenuDemo() {
             )}
           </NavigationMenuList>
           <NavigationMenuViewport
-            className="origin-top-center relative mt-1.5 h-[var(--radix-navigation-menu-viewport-height)] w-full sm:w-auto overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90"
+            className="origin-top-center mt-1.5 h-[var(--radix-navigation-menu-viewport-height)] w-[calc(100vw-2rem)] md:w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90"
           />
         </NavigationMenu>
         <div className="flex items-center gap-2 sm:gap-4">
