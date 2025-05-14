@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ClipboardList, CheckCircle, AlertCircle, Upload, Building2, UserRound } from "lucide-react";
+import { ClipboardList, CheckCircle, AlertCircle, Upload, Building2, UserRound, X } from "lucide-react";
 import  CreditStatus  from "./Status";
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -374,6 +374,9 @@ export default function CreditUnderwriting() {
       }, 0);
     };
 
+
+
+
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4">
@@ -643,20 +646,34 @@ export default function CreditUnderwriting() {
           <CardContent>
             <ul className="space-y-4">
               <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span>Government ID</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span>Proof of Address</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-yellow-500" />
-                <span>Bank Statements (Last 6 months)</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-yellow-500" />
-                <span>Business Registration</span>
+                {govId ? (
+                   <CheckCircle className="h-4 w-4 text-green-500" />
+                 ) : formValues.documents.govId ? (
+                   <AlertCircle className="h-4 w-4 text-yellow-500" />
+                 ) : (
+                   <X className="h-4 w-4 text-red-500" />
+                 )}
+                 <span>Government ID</span>
+               </li>
+               <li className="flex items-center gap-2">
+                 {bankStatements ? (
+                   <CheckCircle className="h-4 w-4 text-green-500" />
+                 ) : formValues.documents.bankStatements ? (
+                   <AlertCircle className="h-4 w-4 text-yellow-500" />
+                 ) : (
+                   <X className="h-4 w-4 text-red-500" />
+                 )}
+                 <span>Bank Statements (Last 6 months)</span>
+               </li>
+               <li className="flex items-center gap-2">
+                 {registration ? (
+                   <CheckCircle className="h-4 w-4 text-green-500" />
+                 ) : formValues.documents.registration ? (
+                   <AlertCircle className="h-4 w-4 text-yellow-500" />
+                 ) : (
+                   <X className="h-4 w-4 text-red-500" />
+                 )}
+                 <span>Business Registration</span>
               </li>
             </ul>
           </CardContent>
