@@ -624,6 +624,24 @@ export default function Dashboard() {
     </Popover>
   );
 
+  if (!user?.publicKey) {
+    return (
+      <div className="container mx-auto max-w-7xl">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <div className="space-y-4">
+              <DollarSign className="h-12 w-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-medium">Login Required</h3>
+              <p className="text-muted-foreground">
+                Please login to use Quick Pay
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

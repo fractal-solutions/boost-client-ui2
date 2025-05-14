@@ -14,6 +14,7 @@ import { Search, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
 
 const investments = [
   {
@@ -67,10 +68,31 @@ const quickInvestAmounts = [
   { value: "500000", label: "KES 500,000" },
 ];
 
+
+
 export default function InvestmentsMarket() {
+  const { user } = useAuth();
   const [showInvestForm, setShowInvestForm] = useState(false);
   const [selectedInvestment, setSelectedInvestment] = useState<typeof investments[0] | null>(null);
   const [amount, setAmount] = useState('');
+
+  if (!user?.publicKey) {
+    return (
+      <div className="container mx-auto max-w-7xl">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <div className="space-y-4">
+              <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-medium">Login Required</h3>
+              <p className="text-muted-foreground">
+                Please login to view Market
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

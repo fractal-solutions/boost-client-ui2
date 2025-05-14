@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ClipboardList, CheckCircle, AlertCircle, Upload, Building2, UserRound } from "lucide-react";
+import { CreditStatus } from "./Status";
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CreditUnderwriting() {
   const [step, setStep] = useState(1);
@@ -16,6 +18,7 @@ export default function CreditUnderwriting() {
   const [bankStatementsPassword, setBankStatementsPassword] = useState<string>("");
   const [hasPassword, setHasPassword] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const { user } = useAuth();
 
   const totalSteps = 3;
   const progress = (step / totalSteps) * 100;
@@ -353,7 +356,26 @@ export default function CreditUnderwriting() {
     }
   ];
 
+  if (!user?.publicKey) {
+    return (
+      <div className="container mx-auto max-w-7xl">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <div className="space-y-4">
+              <ClipboardList className="h-12 w-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-medium">Login Required</h3>
+              <p className="text-muted-foreground">
+                Please login to view Underwriting
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
+    <div className="space-y-6">
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
@@ -472,6 +494,8 @@ export default function CreditUnderwriting() {
           </CardContent>
         </Card>
       </div>
+    </div>
+    <CreditStatus />
     </div>
   );
 }

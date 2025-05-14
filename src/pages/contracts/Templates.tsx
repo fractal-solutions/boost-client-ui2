@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, FileText, Star, Copy } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const templates = [
   {
@@ -41,6 +42,26 @@ const templates = [
 ];
 
 export default function ContractsTemplates() {
+  const { user } = useAuth();
+
+  if (!user?.publicKey) {
+    return (
+      <div className="container mx-auto max-w-7xl">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <div className="space-y-4">
+              <Star className="h-12 w-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-medium">Login Required</h3>
+              <p className="text-muted-foreground">
+                Please login to view Templates
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between gap-4">
