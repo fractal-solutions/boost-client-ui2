@@ -6,6 +6,7 @@ interface User {
   username: string;
   phoneNumber: string;
   publicKey: string;
+  role: string;
 }
 
 interface AuthContextType {

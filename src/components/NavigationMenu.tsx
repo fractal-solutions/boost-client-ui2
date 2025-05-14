@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -30,12 +30,50 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 
 export function NavigationMenuDemo() {
-  const [menuVisibility, setMenuVisibility] = useState({
-    vendor: true,
-    payments: true,
-    contracts: true,
-    investments: true,
-    credit: true,
+  const { user, isAuthenticated, login, logout, register, verifyPhone, confirmPhone } = useAuth();
+  const [menuVisibility, setMenuVisibility] = useState(() => {
+    //const authUser = localStorage.getItem('auth_user');
+    let defaultVisibility = {
+      vendor: true,
+      payments: true,
+      contracts: true,
+      investments: true,
+      credit: true,
+    };
+
+    if (user && isAuthenticated) {
+      try {
+        //const user = JSON.parse(authUser);
+        if (user.role === 'VENDOR') {
+          defaultVisibility = {
+            vendor: true,
+            credit: true,
+            payments: true,
+            contracts: true,
+            investments: false
+          };
+        } else if (user.role === 'USER') {
+          defaultVisibility =  {
+            vendor: false,
+            credit: false,
+            payments: true,
+            contracts: false,
+            investments: true
+          };
+        }
+      } catch (e) {
+        console.error('Error parsing auth_user', e);
+      }
+    } else if (!user || !isAuthenticated) {
+      defaultVisibility = {
+        vendor: false,
+        payments: false,
+        contracts: false,
+        investments: false,
+        credit: false,
+      };
+    }
+    return defaultVisibility;
   });
 
   const toggleVisibility = (menu: 'vendor' | 'payments' | 'contracts' | 'investments' | 'credit') => {
@@ -45,7 +83,16 @@ export function NavigationMenuDemo() {
     }));
   };
 
-  const { user, isAuthenticated, login, logout, register, verifyPhone, confirmPhone } = useAuth();
+  useEffect(() => {
+    setMenuVisibility({
+      vendor: user?.role === "VENDOR",
+      payments: user?.role === "VENDOR",
+      contracts: user?.role === "VENDOR",
+      investments: false,
+      credit: user?.role === "VENDOR"
+    })
+  }, [user]);
+
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [loginData, setLoginData] = useState({ phoneNumber: '', password: '' });
@@ -250,7 +297,7 @@ export function NavigationMenuDemo() {
               <Settings className="h-4 w-4 cursor-pointer bg-white dark:bg-black" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Menu Visibility</DropdownMenuLabel>
+            {user && isAuthenticated && (<div><DropdownMenuLabel>Menu Visibility</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuCheckboxItem
                 checked={menuVisibility.vendor}
@@ -281,7 +328,7 @@ export function NavigationMenuDemo() {
                 onCheckedChange={() => toggleVisibility('credit')}
               >
                 Credit Menu
-              </DropdownMenuCheckboxItem>
+              </DropdownMenuCheckboxItem></div>)}
 
               <DropdownMenuSeparator />
               <DropdownMenuLabel>User Settings</DropdownMenuLabel>

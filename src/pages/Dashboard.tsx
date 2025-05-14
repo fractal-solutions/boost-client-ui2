@@ -784,6 +784,7 @@ export default function Dashboard() {
                               onSelect={() => {
                                 setRecipientType('phone');
                                 setRecipientId(contact.phoneNumber);
+                                setShowSendForm(!showSendForm);
                                 handleSendMoney();
                               }}
                             >
