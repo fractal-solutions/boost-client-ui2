@@ -4,7 +4,7 @@ import { ArrowUpRight, BrainCircuit, LineChart, AlertTriangle } from "lucide-rea
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from '@/contexts/AuthContext';
 
-export function CreditStatus() {
+export default function CreditStatus() {
   const { user } = useAuth();
   if (!user?.publicKey) {
     return (

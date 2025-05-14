@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ClipboardList, CheckCircle, AlertCircle, Upload, Building2, UserRound } from "lucide-react";
-import { CreditStatus } from "./Status";
+import  CreditStatus  from "./Status";
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function CreditUnderwriting() {
@@ -20,32 +20,120 @@ export default function CreditUnderwriting() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const { user } = useAuth();
 
-  const totalSteps = 3;
-  const progress = (step / totalSteps) * 100;
+  const [formValues, setFormValues] = useState({
+    personalInfo: {
+      fullName: '',
+      idNumber: '',
+      phone: '',
+      address: ''
+    },
+    businessDetails: {
+      businessName: '',
+      businessType: '',
+      monthlyRevenue: '',
+      yearsOperation: 0
+    },
+    documents: {
+      govId: null,
+      registration: null,
+      bankStatements: null,
+      bankStatementsPassword: ''
+    }
+  });
 
-  const PersonalInfoForm = () => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="fullName">Full Name</Label>
-        <Input id="fullName" placeholder="Enter your full name" />
+  const totalSteps = 3;
+
+  // Calculate actual completion percentage
+  const calculateCompletion = () => {
+    let completedFields = 0;
+    let totalFields = 0;
+
+    // Personal Info
+    totalFields += 4;
+    if (formValues.personalInfo.fullName) completedFields++;
+    if (formValues.personalInfo.idNumber) completedFields++;
+    if (formValues.personalInfo.phone) completedFields++;
+    if (formValues.personalInfo.address) completedFields++;
+
+    // Business Details
+    totalFields += 4;
+    if (formValues.businessDetails.businessName) completedFields++;
+    if (formValues.businessDetails.businessType) completedFields++;
+    if (formValues.businessDetails.monthlyRevenue) completedFields++;
+    if (formValues.businessDetails.yearsOperation > 0) completedFields++;
+
+    // Document Uploads
+    totalFields += 3;
+    if (govId) completedFields++;
+    if (registration) completedFields++;
+    if (bankStatements) completedFields++;
+
+    return Math.round((completedFields / totalFields) * 100);
+  };
+
+  const progress = calculateCompletion();
+  const actualProgress = calculateCompletion();
+
+  const PersonalInfoForm = memo(({ values, onChange }: {
+    values: typeof formValues.personalInfo,
+    onChange: (newValues: typeof formValues.personalInfo) => void
+  }) => {
+    const fullNameRef = useRef<HTMLInputElement>(null);
+    
+    const handleChange = useCallback((field: keyof typeof values) =>
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        onChange({ ...values, [field]: e.target.value });
+        // Maintain focus after state update
+        if (field === 'fullName' && fullNameRef.current) {
+          setTimeout(() => fullNameRef.current?.focus(), 0);
+        }
+      }, [values, onChange]);
+
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="fullName">Full Name</Label>
+          <Input
+            id="fullName"
+            ref={fullNameRef}
+            placeholder="Enter your full name"
+            defaultValue={values.fullName}
+            onBlur={handleChange('fullName')}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="idNumber">National ID Number</Label>
+          <Input
+            id="idNumber"
+            placeholder="Enter ID number"
+            defaultValue={values.idNumber}
+            onBlur={handleChange('idNumber')}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="phone">Phone Number</Label>
+          <Input
+            id="phone"
+            placeholder="+254 7XX XXX XXX"
+            defaultValue={values.phone}
+            onBlur={handleChange('phone')}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="address">Physical Address</Label>
+          <Input
+            id="address"
+            placeholder="Enter your address"
+            defaultValue={values.address}
+            onBlur={handleChange('address')}
+          />
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="idNumber">National ID Number</Label>
-        <Input id="idNumber" placeholder="Enter ID number" />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="phone">Phone Number</Label>
-        <Input id="phone" placeholder="+254 7XX XXX XXX" />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="address">Physical Address</Label>
-        <Input id="address" placeholder="Enter your address" />
-      </div>
-    </div>
-  );
+    )
+  });
 
   const BusinessDetailsForm = () => {
-    const [years, setYears] = useState(0);
+    const [years, setYears] = useState(formValues.businessDetails.yearsOperation);
     const businessTypes = [
       {
         category: "High-Risk Industries",
@@ -80,13 +168,35 @@ export default function CreditUnderwriting() {
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="businessName">Business Name</Label>
-          <Input id="businessName" placeholder="Enter business name" />
+          <Input
+            id="businessName"
+            placeholder="Enter business name"
+            defaultValue={formValues.businessDetails.businessName}
+            onBlur={(e) => {
+              const value = e.target.value;
+              setFormValues(prev => ({
+                ...prev,
+                businessDetails: {
+                  ...prev.businessDetails,
+                  businessName: value
+                }
+              }));
+            }}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="businessType">Business Type</Label>
           <select
             id="businessType"
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            value={formValues.businessDetails.businessType}
+            onChange={(e) => setFormValues(prev => ({
+              ...prev,
+              businessDetails: {
+                ...prev.businessDetails,
+                businessType: e.target.value
+              }
+            }))}
           >
             <option value="">Select business type</option>
             {businessTypes.map((group) => (
@@ -105,6 +215,14 @@ export default function CreditUnderwriting() {
           <select
             id="monthlyRevenue"
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            value={formValues.businessDetails.monthlyRevenue}
+            onChange={(e) => setFormValues(prev => ({
+              ...prev,
+              businessDetails: {
+                ...prev.businessDetails,
+                monthlyRevenue: e.target.value
+              }
+            }))}
           >
             <option value="">Select revenue range</option>
             <option value="below-50k">Below KES 50,000</option>
@@ -122,7 +240,17 @@ export default function CreditUnderwriting() {
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setYears(Math.max(0, years - 1))}
+              onClick={() => {
+                const newYears = Math.max(0, years - 1);
+                setYears(newYears);
+                setFormValues(prev => ({
+                  ...prev,
+                  businessDetails: {
+                    ...prev.businessDetails,
+                    yearsOperation: newYears
+                  }
+                }));
+              }}
               disabled={years <= 0}
             >
               -
@@ -130,14 +258,34 @@ export default function CreditUnderwriting() {
             <Input
               id="yearsOperation"
               value={years}
-              onChange={(e) => setYears(Number(e.target.value))}
+              onChange={(e) => {
+                const newYears = Number(e.target.value);
+                setYears(newYears);
+                setFormValues(prev => ({
+                  ...prev,
+                  businessDetails: {
+                    ...prev.businessDetails,
+                    yearsOperation: newYears
+                  }
+                }));
+              }}
               className="text-center w-20"
               type="number"
             />
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setYears(years + 1)}
+              onClick={() => {
+                const newYears = years + 1;
+                setYears(newYears);
+                setFormValues(prev => ({
+                  ...prev,
+                  businessDetails: {
+                    ...prev.businessDetails,
+                    yearsOperation: newYears
+                  }
+                }));
+              }}
             >
               +
             </Button>
@@ -232,7 +380,11 @@ export default function CreditUnderwriting() {
           <div className="space-y-2">
             <Label>Government ID</Label>
             <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50"
-                 onClick={() => document.getElementById('govId')?.click()}>
+                 onClick={(e) => {
+                   if (e.target === e.currentTarget) {
+                     document.getElementById('govId')?.click();
+                   }
+                 }}>
               <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">Upload ID (Image)</p>
               <input
@@ -249,7 +401,11 @@ export default function CreditUnderwriting() {
           <div className="space-y-2">
             <Label>Business Registration</Label>
             <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50"
-                 onClick={() => document.getElementById('registration')?.click()}>
+                 onClick={(e) => {
+                   if (e.target === e.currentTarget) {
+                     document.getElementById('registration')?.click();
+                   }
+                 }}>
               <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">Upload Registration (PDF)</p>
               <input
@@ -266,7 +422,11 @@ export default function CreditUnderwriting() {
           <div className="space-y-2 col-span-2">
             <Label>Bank Statements</Label>
             <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50"
-                 onClick={() => document.getElementById('bankStatements')?.click()}>
+                 onClick={(e) => {
+                   if (e.target === e.currentTarget) {
+                     document.getElementById('bankStatements')?.click();
+                   }
+                 }}>
               <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">Upload Statements (PDF)</p>
               <input
@@ -342,7 +502,13 @@ export default function CreditUnderwriting() {
     {
       title: "Personal Information",
       icon: <UserRound className="h-5 w-5" />,
-      component: <PersonalInfoForm />
+      component: <PersonalInfoForm
+        values={formValues.personalInfo}
+        onChange={(newValues) => setFormValues(prev => ({
+          ...prev,
+          personalInfo: newValues
+        }))}
+      />
     },
     {
       title: "Business Details",
@@ -390,9 +556,9 @@ export default function CreditUnderwriting() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Application Progress</span>
-                  <span>75%</span>
+                  <span>{Math.round(progress)}%</span>
                 </div>
-                <Progress value={75} />
+                <Progress value={progress} />
               </div>
               
               <div className="space-y-4">
@@ -413,18 +579,20 @@ export default function CreditUnderwriting() {
               <Dialog open={isDialogOpen} onOpenChange={(open) => {
                 setIsDialogOpen(open);
                 if (!open) setUploadSuccess(false);
-              }}>
+              }} modal={false}>
                 <DialogTrigger asChild>
-                  <Button className="w-full">Continue Application</Button>
+                  <Button className="w-full">Boost Credit Application</Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[600px] h-[90vh] overflow-hidden flex flex-col">
+                <DialogContent
+                 className="sm:max-w-[600px] h-[90vh] overflow-hidden flex flex-col"
+               >
                   <DialogHeader className="flex-none">
                     <DialogTitle className="flex items-center gap-2">
                       {steps[step - 1].icon}
                       {steps[step - 1].title}
                     </DialogTitle>
                   </DialogHeader>
-                  <div className="mt-4 flex-1 min-h-0">
+                  <div className="mt-4 flex-1 min-h-0 flex flex-col">
                     <div className="space-y-2 mb-6 bg-background pt-2">
                       <div className="flex justify-between text-sm">
                         <span>Step {step} of {totalSteps}</span>
@@ -432,7 +600,7 @@ export default function CreditUnderwriting() {
                       </div>
                       <Progress value={progress} />
                     </div>
-                    <div className="h-full overflow-auto scrollbar-none overflow-y-auto pb-20 mb-12 px-2">
+                    <div className="flex-1 overflow-y-auto pb-20 mb-12 px-2">
                       {steps[step - 1].component}
                     </div>
                   </div>
