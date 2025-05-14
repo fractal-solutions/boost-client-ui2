@@ -566,15 +566,36 @@ export default function CreditUnderwriting() {
               
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  {formValues.personalInfo.fullName && formValues.personalInfo.idNumber && formValues.personalInfo.phone && formValues.personalInfo.address
+                   ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : formValues.personalInfo.fullName || formValues.personalInfo.idNumber || formValues.personalInfo.phone || formValues.personalInfo.address ? (
+                    <AlertCircle className="h-4 w-4 text-yellow-500" />
+                  ) : (
+                    <X className="h-4 w-4 text-red-500" />
+                  )}
                   <span>Personal Information</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  {formValues.businessDetails.businessName && formValues.businessDetails.businessType && formValues.businessDetails.monthlyRevenue && formValues.businessDetails.yearsOperation
+                    ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : formValues.businessDetails.businessName || formValues.businessDetails.businessType || formValues.businessDetails.monthlyRevenue || formValues.businessDetails.yearsOperation ? (
+                      <AlertCircle className="h-4 w-4 text-yellow-500" />
+                    ) : (
+                      <X className="h-4 w-4 text-red-500" />
+                    )}
                   <span>Business Details</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-yellow-500" />
+                  {formValues.documents.govId && formValues.documents.registration && formValues.documents.bankStatements
+                      ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : formValues.documents.govId || formValues.documents.registration || formValues.documents.bankStatements ? (
+                        <AlertCircle className="h-4 w-4 text-yellow-500" />
+                      ) : (
+                        <X className="h-4 w-4 text-red-500" />
+                      )}
                   <span>Document Verification (Pending)</span>
                 </div>
               </div>
