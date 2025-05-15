@@ -6,7 +6,7 @@ interface User {
   username: string;
   phoneNumber: string;
   publicKey: string;
-  role: string;
+  role: 'USER' | 'VENDOR' | 'ADMIN';
 }
 
 interface AuthContextType {
@@ -44,9 +44,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    // Initialize from localStorage
-    const savedUser = localStorage.getItem('auth_user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    try {
+      const savedUser = localStorage.getItem('auth_user');
+      if (!savedUser) return null;
+
+      const parsedUser = JSON.parse(savedUser);
+      
+      // Validate that the stored user data has all required fields
+      if (!parsedUser || !parsedUser.role || !parsedUser.id || !parsedUser.username || 
+          !parsedUser.phoneNumber || !parsedUser.publicKey) {
+        localStorage.removeItem('auth_user');
+        return null;
+      }
+
+      return parsedUser;
+    } catch (error) {
+      localStorage.removeItem('auth_user');
+      return null;
+    }
   });
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem('auth_token');
@@ -101,10 +116,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.message || 'Login failed');
       }
 
-      setUser(data.user);
+      // Validate user data before storing
+      if (!data.user || !data.user.role) {
+        throw new Error('Invalid user data received');
+      }
+
+      // Ensure user object has all required fields
+      const userData = {
+        id: data.user.id,
+        username: data.user.username,
+        phoneNumber: data.user.phoneNumber,
+        publicKey: data.user.publicKey,
+        role: data.user.role
+      };
+
+      setUser(userData);
       setToken(data.token);
       localStorage.setItem('auth_token', data.token);
-      localStorage.setItem('auth_user', JSON.stringify(data.user));
+      localStorage.setItem('auth_user', JSON.stringify(userData));
       toast.success('Logged in successfully');
     } catch (error: any) {
       toast.error(error.message || 'Login failed');
@@ -116,8 +145,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setToken(null);
     localStorage.removeItem('auth_token');
-    localStorage.removeItem('private_key_active');
     localStorage.removeItem('auth_user');
+    localStorage.removeItem('private_key_active');
+    localStorage.removeItem('private_key');
     toast.success('Logged out successfully');
   };
 

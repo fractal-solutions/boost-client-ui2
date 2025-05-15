@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 const TRANSACTION_FEE_PERCENTAGE = 0.01; // 1% fee
 const PERCENTAGE_TOLERANCE = 0.001; // 0.1% tolerance for rounding errors
@@ -149,6 +150,15 @@ export default function Dashboard() {
   const [isProcessingSend, setIsProcessingSend] = useState(false);
   const [frequentContacts, setFrequentContacts] = useState<FrequentContact[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const navigate = useNavigate();
+
+
+
+  useEffect(() => {
+    if (!user?.publicKey) {
+      navigate('/home');
+    }
+  }, []);
 
 
   const fetchBalance = useCallback(async () => {

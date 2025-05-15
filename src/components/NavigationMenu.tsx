@@ -25,56 +25,51 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Wallet, Contact as FileContract, LineChart, Bell, Settings, User, Store, Scale, Home, LogIn, LogOut, UserPlus, Copy, Download, AlertTriangle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 
 export function NavigationMenuDemo() {
   const { user, isAuthenticated, login, logout, register, verifyPhone, confirmPhone } = useAuth();
-  const [menuVisibility, setMenuVisibility] = useState(() => {
-    //const authUser = localStorage.getItem('auth_user');
-    let defaultVisibility = {
-      vendor: true,
-      payments: true,
-      contracts: true,
-      investments: true,
-      credit: true,
-    };
+  const navigate = useNavigate();
+  const [menuVisibility, setMenuVisibility] = useState({
+    vendor: false,
+    payments: false,
+    contracts: false,
+    investments: false,
+    credit: false
+  });
 
-    if (user && isAuthenticated) {
-      try {
-        //const user = JSON.parse(authUser);
-        if (user.role === 'VENDOR') {
-          defaultVisibility = {
-            vendor: true,
-            credit: true,
-            payments: true,
-            contracts: true,
-            investments: false
-          };
-        } else if (user.role === 'USER') {
-          defaultVisibility =  {
-            vendor: false,
-            credit: false,
-            payments: true,
-            contracts: false,
-            investments: true
-          };
-        }
-      } catch (e) {
-        console.error('Error parsing auth_user', e);
-      }
-    } else if (!user || !isAuthenticated) {
-      defaultVisibility = {
+  useEffect(() => {
+    if (!user || !isAuthenticated) {
+      setMenuVisibility({
         vendor: false,
         payments: false,
         contracts: false,
         investments: false,
-        credit: false,
-      };
+        credit: false
+      });
+      return;
     }
-    return defaultVisibility;
-  });
+
+    if (user.role === 'VENDOR') {
+      setMenuVisibility({
+        vendor: true,
+        payments: true,
+        contracts: true,
+        investments: false,
+        credit: true
+      });
+    } else if (user.role === 'USER') {
+      setMenuVisibility({
+        vendor: false,
+        payments: true,
+        contracts: true,
+        investments: true,
+        credit: false
+      });
+    }
+  }, [user, isAuthenticated]);
 
   const toggleVisibility = (menu: 'vendor' | 'payments' | 'contracts' | 'investments' | 'credit') => {
     setMenuVisibility(prev => ({
@@ -83,15 +78,15 @@ export function NavigationMenuDemo() {
     }));
   };
 
-  useEffect(() => {
-    setMenuVisibility({
-      vendor: user?.role === "VENDOR",
-      payments: user?.role === "VENDOR",
-      contracts: user?.role === "VENDOR",
-      investments: false,
-      credit: user?.role === "VENDOR"
-    })
-  }, [user]);
+  // useEffect(() => {
+  //   setMenuVisibility({
+  //     vendor: user?.role === "VENDOR",
+  //     payments: user?.role === "VENDOR",
+  //     contracts: user?.role === "VENDOR",
+  //     investments: false,
+  //     credit: user?.role === "VENDOR"
+  //   })
+  // }, [user]);
 
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -120,6 +115,11 @@ export function NavigationMenuDemo() {
       setIsRegisterOpen(false);
       setRegistrationStep(1);
     } catch {}
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/home'); // Redirect to home after logout
   };
 
   return (
@@ -297,7 +297,7 @@ export function NavigationMenuDemo() {
               <Settings className="h-4 w-4 cursor-pointer bg-white dark:bg-black" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-            {user && isAuthenticated && (<div><DropdownMenuLabel>Menu Visibility</DropdownMenuLabel>
+            {false && isAuthenticated && (<div><DropdownMenuLabel>Menu Visibility</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuCheckboxItem
                 checked={menuVisibility.vendor}
@@ -369,7 +369,7 @@ export function NavigationMenuDemo() {
                       </div>
                     </div>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={logout}>
+                    <DropdownMenuItem onClick={handleLogout}>
                       <LogOut className="mr-2 h-4 w-4" />
                       <span>Logout</span>
                     </DropdownMenuItem>
