@@ -26,9 +26,9 @@ export default function Home() {
     {
       title: "Quick Pay",
       description: "Send money instantly",
-      icon: <Send className="h-8 w-8 text-primary" />,
+      icon: <Send className="h-8 w-8 text-amber-400" />,  // Changed to amber/gold
       href: "/",
-      iconColor: "bg-primary/20 text-primary"
+      iconColor: "bg-amber-400/20 text-amber-400"  // Using amber for gold effect
     },
     {
       title: "Scheduled",
@@ -169,19 +169,64 @@ export default function Home() {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        /* Add the shimmer animation */
+        @keyframes shimmer {
+          0% {
+            background-position: 200% 0;
+          }
+          100% {
+            background-position: -200% 0;
+          }
+        }
+        
+        .shimmer-gold {
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .shimmer-gold::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          background: linear-gradient(
+            120deg,
+            transparent 20%,
+            rgba(251, 191, 36, 0.1) 30%,
+            rgba(251, 191, 36, 0.15) 40%,
+            transparent 50%
+          );
+          background-size: 200% 100%;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        
+        .shimmer-gold:hover::before {
+          opacity: 1;
+          animation: shimmer 3s infinite linear;
+        }
       `}</style>
     </div>
   );
 }
 
-  const getCardStyles = (baseColor: string) => {
-    const styles = {
-      primary: 'border-primary/10 bg-primary/5',
-      purple: 'border-purple-500/20 bg-purple-500/20',
-      pink: 'border-pink-500/20 bg-pink-500/20'
-    };
-    return `group relative overflow-hidden ${styles[baseColor]} backdrop-blur transition-all hover:scale-105`;
+const getCardStyles = (baseColor: string) => {
+  const styles = {
+    primary: 'border-primary/10 bg-primary/5',
+    purple: 'border-purple-500/20 bg-purple-500/20',
+    pink: 'border-pink-500/20 bg-pink-500/20',
+    amber: 'border-amber-400/10 bg-amber-400/5 hover:shadow-amber-400/20'  // Enhanced amber style
   };
+
+  const baseStyles = `group relative overflow-hidden ${styles[baseColor]} backdrop-blur transition-all hover:scale-105 h-full`;
+  
+  // Add shimmer class if it's amber/gold
+  return baseColor === 'amber' 
+    ? `${baseStyles} hover:shadow-lg hover:border-amber-400/30 shimmer-gold` 
+    : baseStyles;
+};
 
   return (
     <div className="space-y-6">
@@ -190,20 +235,24 @@ export default function Home() {
         <p className="text-muted-foreground">Quick access to your favorite features</p>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-3 w-full">
+      <div className="grid gap-8 md:grid-cols-4 sm:grid-cols-2 w-full">
         {shortcuts.map((shortcut) => {
           // Extract color from iconColor safely
-          const baseColor = shortcut.iconColor.includes('primary') ? 'primary' : 
-                          shortcut.iconColor.includes('purple') ? 'purple-500' : 
-                          'pink-500';
+          const baseColor = shortcut.title === "Quick Pay" ? "amber" :
+                       shortcut.iconColor.includes('primary') ? 'primary' : 
+                       shortcut.iconColor.includes('purple') ? 'purple-500' : 
+                       'pink-500';
           
           return (
             <Link to={shortcut.href} key={shortcut.title}>
               <Card className={getCardStyles(baseColor)}>
                 <div className={`
                   absolute inset-0 bg-gradient-to-br 
-                  from-${baseColor}/30 
-                  via-transparent to-transparent opacity-0 
+                  ${baseColor === 'amber' 
+                    ? 'from-amber-400/40 via-amber-300/20 to-transparent' 
+                    : `from-${baseColor}/30 via-transparent to-transparent`
+                  }
+                  opacity-0 
                   group-hover:opacity-100 transition-opacity
                 `} />
                 <div className="relative p-6">

@@ -36,6 +36,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { chain_ip, metadata_ip } from '@/lib/config';
 
 const TRANSACTION_FEE_PERCENTAGE = 0.01; // 1% fee
 const PERCENTAGE_TOLERANCE = 0.001; // 0.1% tolerance for rounding errors
@@ -168,12 +169,12 @@ export default function Dashboard() {
       setIsLoadingBalance(true);
       
       const [balanceResponse, statsResponse] = await Promise.all([
-        fetch('http://localhost:2224/balance', {
+        fetch(`${metadata_ip}/balance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: user.publicKey })
         }),
-        fetch('http://localhost:2224/stats', {
+        fetch(`${metadata_ip}/stats`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: user.publicKey })
@@ -198,7 +199,7 @@ export default function Dashboard() {
 
     try {
       setIsLoadingTransactions(true);
-      const response = await fetch('http://localhost:2224/last-transactions', {
+      const response = await fetch(`${metadata_ip}/last-transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

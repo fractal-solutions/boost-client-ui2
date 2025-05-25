@@ -1,4 +1,5 @@
 const NETWORK_SECRET = 'test-secret-123';
+import { chain_ip, metadata_ip } from '@/lib/config';
 // Helper function to format public key
 function formatPublicKey(key: string) {
     if (!key.includes('-----BEGIN PUBLIC KEY-----')) {
@@ -18,7 +19,7 @@ export function stripPublicKey(key: string) {
 export async function makeDeposit(to: string, amount: number, token: string) {
     try {
         const formattedKey = formatPublicKey(to);
-        const response = await fetch('http://localhost:2222/deposit', {
+        const response = await fetch(`${chain_ip}/deposit`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -52,7 +53,7 @@ export async function makeWithdrawal(
 ) {
     try {
         //console.log('private key', privateKey);
-        const response = await fetch('http://localhost:2222/withdraw', {
+        const response = await fetch(`${chain_ip}/withdraw`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -135,7 +136,7 @@ export async function sendTransaction(
     amount: number,
     token: string
   ) {
-    const response = await fetch('http://localhost:2222/txn', {
+    const response = await fetch(`${chain_ip}/txn`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -154,6 +155,7 @@ export async function sendTransaction(
     });
   
     const data = await response.json();
+    console.log(data);
     if (!data.result) {
       throw new Error(data.error || 'Transaction failed');
     }
