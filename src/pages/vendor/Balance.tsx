@@ -17,6 +17,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { stripPublicKey } from '@/services/transactions';
 import { toast } from 'sonner';
+import { metadata_ip } from '@/lib/config';
 
 interface Transaction {
   type: 'SENT' | 'RECEIVED';
@@ -60,12 +61,12 @@ export default function VendorBalance() {
       setIsLoadingBalance(true);
       
       const [balanceResponse, statsResponse] = await Promise.all([
-        fetch('http://localhost:2224/balance', {
+        fetch(`${metadata_ip}/balance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: user.publicKey })
         }),
-        fetch('http://localhost:2224/stats', {
+        fetch(`${metadata_ip}/stats`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: user.publicKey })
@@ -90,7 +91,7 @@ export default function VendorBalance() {
 
     try {
       setIsLoadingTransactions(true);
-      const response = await fetch('http://localhost:2224/last-transactions', {
+      const response = await fetch(`${metadata_ip}/last-transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -312,12 +313,12 @@ export function OnlyBalance() {
       setIsLoadingBalance(true);
       
       const [balanceResponse, statsResponse] = await Promise.all([
-        fetch('http://localhost:2224/balance', {
+        fetch(`${metadata_ip}/balance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: user.publicKey })
         }),
-        fetch('http://localhost:2224/stats', {
+        fetch(`${metadata_ip}/stats`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: user.publicKey })
@@ -342,7 +343,7 @@ export function OnlyBalance() {
 
     try {
       setIsLoadingTransactions(true);
-      const response = await fetch('http://localhost:2224/last-transactions', {
+      const response = await fetch(`${metadata_ip}/last-transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

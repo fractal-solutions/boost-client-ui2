@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
+import { users_ws, chain_ws } from '@/lib/config';
 
 interface WebSocketContextType {
   socketGeneral: WebSocket | null;
@@ -32,7 +33,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     console.log(`Connecting as ${clientType} with ID ${user.phoneNumber}`);
 
     //const ws = new WebSocket(`ws://localhost:2225/ws?clientType=${clientType}&id=${user.phoneNumber}`);
-    const wsGeneral = new WebSocket(`ws://localhost:2225/ws?clientType=${clientType}&id=${user.phoneNumber}`);
+    const wsGeneral = new WebSocket(`${users_ws}?clientType=${clientType}&id=${user.phoneNumber}`);
     
     wsGeneral.onopen = () => {
       console.log('General WebSocket Connected');
@@ -61,7 +62,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     if (!user?.phoneNumber) return;
 
     // Connect to the transaction WebSocket server (port 2222)
-    const wsTransaction = new WebSocket(`ws://localhost:2222/ws?clientType=user&id=${user.phoneNumber}`);
+    const wsTransaction = new WebSocket(`${chain_ws}?clientType=user&id=${user.phoneNumber}`);
     
     wsTransaction.onopen = () => {
       console.log('Transaction WebSocket Connected');

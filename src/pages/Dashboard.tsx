@@ -36,7 +36,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { chain_ip, metadata_ip } from '@/lib/config';
+import { chain_ip, metadata_ip, users_ip } from '@/lib/config';
 
 const TRANSACTION_FEE_PERCENTAGE = 0.01; // 1% fee
 const PERCENTAGE_TOLERANCE = 0.001; // 0.1% tolerance for rounding errors
@@ -502,7 +502,7 @@ export default function Dashboard() {
       const contactDetails = await Promise.all(
         sortedContacts.map(async ([, data]) => {
           try {
-            const response = await fetch('http://localhost:2225/user/by-public-key', {
+            const response = await fetch(`${users_ip}/user/by-public-key`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ publicKey: data.publicKey })
@@ -1499,7 +1499,7 @@ export default function Dashboard() {
 
                 try {
                   // Send an invalid request to trigger the catch block
-                  await fetch('http://localhost:2225/payment-complete', {
+                  await fetch(`${users_ip}/payment-complete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

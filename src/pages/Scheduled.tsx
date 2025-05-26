@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { AnimatePresence, motion } from "framer-motion";
+import { smartcron_ip } from '@/lib/config';
 
 type TimeUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
 
@@ -106,7 +107,7 @@ export default function Scheduled() {
         throw new Error('Please login first');
       }
 
-      const response = await fetch('http://localhost:2223/contract', {
+      const response = await fetch(`${smartcron_ip}/contract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

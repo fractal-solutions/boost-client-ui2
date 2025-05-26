@@ -1,5 +1,7 @@
+import { users_ip } from "@/lib/config";
+
 export async function lookupUserByUsername(username: string) {
-  const response = await fetch('http://localhost:2225/user/by-username', {
+  const response = await fetch(`${users_ip}/user/by-username`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username })
@@ -14,7 +16,7 @@ export async function lookupUserByUsername(username: string) {
 }
 
 export async function lookupUserByPhone(phoneNumber: string) {
-  const response = await fetch('http://localhost:2225/user/by-phone', {
+  const response = await fetch(`${users_ip}/user/by-phone`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phoneNumber })
@@ -31,7 +33,7 @@ export async function lookupUserByPhone(phoneNumber: string) {
 export async function getFullUserDetails(phoneNumber: string) {
   try {
     // First get the user by phone number
-    const phoneResponse = await fetch('http://localhost:2225/user/by-phone', {
+    const phoneResponse = await fetch(`${users_ip}/user/by-phone`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phoneNumber })
@@ -43,7 +45,7 @@ export async function getFullUserDetails(phoneNumber: string) {
     }
 
     // Then get additional details using the public key
-    const publicKeyResponse = await fetch('http://localhost:2225/user/by-public-key', {
+    const publicKeyResponse = await fetch(`${users_ip}/user/by-public-key`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ publicKey: phoneData.data.publicKey })

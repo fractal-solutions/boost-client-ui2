@@ -38,6 +38,7 @@ import { Label } from '@/components/ui/label';
 import { OnlyBalance } from './Balance';
 import { getBalance } from '@/services/balance';
 import { getFullUserDetails } from '@/services/users';
+import { metadata_ip, users_ip } from '@/lib/config';
 
 interface CartItem {
   id: string;
@@ -296,7 +297,7 @@ export default function VendorPOS() {
       };
   
       // Send the payment request
-      const response = await fetch('http://localhost:2225/payment-request', {
+      const response = await fetch(`${users_ip}/payment-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -394,7 +395,7 @@ export default function VendorPOS() {
 
     try {
       setIsLoadingTransactions(true);
-      const response = await fetch('http://localhost:2224/last-transactions', {
+      const response = await fetch(`${metadata_ip}/last-transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

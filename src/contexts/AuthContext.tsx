@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { users_ip } from "@/lib/config";
 
 interface User {
   id: string;
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyToken = async (token: string) => {
     try {
-      const response = await fetch('http://localhost:2225/verify', {
+      const response = await fetch(`${users_ip}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token })
@@ -105,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (phoneNumber: string, password: string) => {
     try {
-      const response = await fetch('http://localhost:2225/login', {
+      const response = await fetch(`${users_ip}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phoneNumber, password })
@@ -153,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (data: RegisterData) => {
     try {
-      const response = await fetch('http://localhost:2225/register', {
+      const response = await fetch(`${users_ip}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -174,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyPhone = async (phoneNumber: string) => {
     try {
-      const response = await fetch('http://localhost:2225/verify-phone', {
+      const response = await fetch(`${users_ip}/verify-phone`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phoneNumber })
@@ -201,7 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const confirmPhone = async (phoneNumber: string, code: string) => {
     try {
-      const response = await fetch('http://localhost:2225/confirm-phone', {
+      const response = await fetch(`${users_ip}/confirm-phone`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phoneNumber, code })

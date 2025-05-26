@@ -14,6 +14,7 @@ import {
   Label,
 } from 'recharts';
 import { Database } from 'lucide-react';
+import { metadata_ip } from '@/lib/config';
 
 interface Transaction {
   type: 'SENT' | 'RECEIVED';
@@ -37,7 +38,7 @@ export default function VendorAnalytics() {
 
     try {
       setIsLoading(true);
-      const response = await fetch('http://localhost:2224/last-transactions', {
+      const response = await fetch(`${metadata_ip}/last-transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

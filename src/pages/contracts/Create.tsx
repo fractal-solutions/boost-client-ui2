@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { lookupUserByPhone, getFullUserDetails } from '@/services/users';
+import { smartcron_ip } from '@/lib/config';
 
 type TimeUnit = 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
 
@@ -132,7 +133,7 @@ export default function ContractsCreate() {
         throw new Error('Please provide your private key');
       }
   
-      const response = await fetch('http://localhost:2223/contract', {
+      const response = await fetch(`${smartcron_ip}/contract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
