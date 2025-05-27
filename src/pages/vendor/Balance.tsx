@@ -131,7 +131,7 @@ export default function VendorBalance() {
             <div className="flex items-center gap-2">
               {user?.publicKey && token && (
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   className="h-8 w-8 p-0"
                   onClick={() => setShowStats(!showStats)}
@@ -140,7 +140,7 @@ export default function VendorBalance() {
                 </Button>
               )}
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 className="h-8 w-8 p-0"
                 onClick={fetchBalance}
@@ -211,7 +211,7 @@ export default function VendorBalance() {
           <CardTitle className="text-lg font-medium flex items-center justify-between">
             Recent Transactions
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               className="h-8 w-8 p-0"
               onClick={fetchRecentTransactions}
@@ -382,7 +382,7 @@ export function OnlyBalance() {
           <div className="flex items-center gap-2">
             {user?.publicKey && token && (
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 className="h-8 w-8 p-0"
                 onClick={() => setShowBalance(!showBalance)}
@@ -395,7 +395,7 @@ export function OnlyBalance() {
               </Button>
             )}
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               className="h-8 w-8 p-0"
               onClick={fetchBalance}

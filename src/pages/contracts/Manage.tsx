@@ -31,6 +31,8 @@ interface UserDetails {
 }
 
 interface Contract {
+  totalPaid: any;
+  interval: number | null;
   contractId: string;
   title: string;
   creator: {
@@ -205,10 +207,13 @@ export default function ContractsManage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
+                  {/*<TableHead>Title</TableHead>*/}
                   <TableHead>Client</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Start Date</TableHead>
+                  <TableHead>Next Date</TableHead>
+                  <TableHead>End Date</TableHead>
+                  <TableHead>Interval</TableHead>
+                  <TableHead>Paid Out</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -216,7 +221,7 @@ export default function ContractsManage() {
               <TableBody>
                 {contracts.map((contract) => (
                   <TableRow key={contract.contractId}>
-                    <TableCell className="font-medium">{contract.title}</TableCell>
+                    {/*<TableCell className="font-medium">{contract.title}</TableCell>*/}
                     <TableCell>
                       {contract.participantDetails?.[0] ? (
                         <div className="flex flex-col">
@@ -236,7 +241,45 @@ export default function ContractsManage() {
                       )}
                     </TableCell>
                     <TableCell>{contract.amount}</TableCell>
-                    <TableCell>{new Date(contract.startDate).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      {contract.nextPaymentDate && ( new Date(contract.endDate) > new Date(contract.nextPaymentDate)) 
+                        ? new Date(contract.nextPaymentDate).toLocaleDateString()
+                        : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      {contract.endDate < contract.startDate
+                        ? new Date(contract.startDate).toLocaleDateString()
+                        : new Date(contract.endDate).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      {contract.interval ? (
+                        (() => {
+                          const interval = Number(contract.interval);
+                          const weeks = Math.floor(interval / (1000 * 60 * 60 * 24 * 7));
+                          const days = Math.floor((interval % (1000 * 60 * 60 * 24 * 7)) / (1000 * 60 * 60 * 24));
+                          const hours = Math.floor((interval % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                          const minutes = Math.floor((interval % (1000 * 60 * 60)) / (1000 * 60));
+
+                          return (
+                            (weeks ? weeks === 1 ? '1 week ' : `${weeks} weeks ` : '') +
+                            (days ? days === 1 ? '1 day ' : `${days} days ` : '') +
+                            (hours ? hours === 1 ? '1 hour ' : `${hours} hours ` : '') +
+                            (minutes ? minutes === 1 ? '1 minute ' : `${minutes} minutes` : '')
+                          );
+                        })()
+                      ) : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      {contract.totalPaid 
+                        ? (contract.totalPaid + contract.amount).toLocaleString('en-US', {
+                            style: 'currency',
+                            currency: 'KES'
+                          })
+                        : (contract.amount).toLocaleString('en-US', {
+                            style: 'currency',
+                            currency: 'KES'
+                          })}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -253,8 +296,9 @@ export default function ContractsManage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="secondary" size="icon" className='bg-red-400 hover:bg-red-600'>
+                          <Button variant="secondary" size="icon" className='bg-red-700 hover:bg-red-400'>
                             <Edit2 className="h-4 w-4" />
+                            Edit
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">

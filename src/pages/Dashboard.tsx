@@ -67,6 +67,12 @@ interface FrequentContact {
   transactionCount: number;
 }
 
+interface UserDetails {
+  username?: string;
+  phoneNumber: string;
+  publicKey: string;
+}
+
 const readPrivateKeyFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -152,6 +158,7 @@ export default function Dashboard() {
   const [frequentContacts, setFrequentContacts] = useState<FrequentContact[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const navigate = useNavigate();
+  const [transactionUserDetails, setTransactionUserDetails] = useState<Map<string, UserDetails>>(new Map());
 
 
 
@@ -160,6 +167,25 @@ export default function Dashboard() {
       navigate('/home');
     }
   }, []);
+
+  const fetchUserDetails = async (publicKey: string): Promise<UserDetails | null> => {
+    try {
+      const response = await fetch(`${users_ip}/user/by-public-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicKey })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        return data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch user details:', error);
+      return null;
+    }
+  };
 
 
   const fetchBalance = useCallback(async () => {
@@ -213,6 +239,25 @@ export default function Dashboard() {
       }
 
       const data = await response.json();
+      
+      // Fetch user details for transaction counterparties
+      const uniqueAddresses = new Set(
+        data.transactions
+          .map((tx: { counterparty: any; }) => tx.counterparty)
+          .filter(Boolean)
+      );
+
+      const userDetailsMap = new Map<string, UserDetails>();
+      await Promise.all(
+        Array.from(uniqueAddresses).map(async (publicKey) => {
+          const details = await fetchUserDetails(publicKey as string);
+          if (details) {
+            userDetailsMap.set(publicKey as string, details);
+          }
+        })
+      );
+
+      setTransactionUserDetails(userDetailsMap);
       setRecentTransactions(data.transactions);
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
@@ -667,7 +712,7 @@ export default function Dashboard() {
               Available Balance
               <div className="flex items-center gap-2">
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   className="h-8 w-8 p-0"
                   onClick={() => setShowQuickPayBalance(!showQuickPayBalance)}
@@ -679,7 +724,7 @@ export default function Dashboard() {
                   )} />
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   className="h-8 w-8 p-0"
                   onClick={() => setShowQuickPayInfo(!showQuickPayInfo)}
@@ -690,7 +735,7 @@ export default function Dashboard() {
                   )} />
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   className="h-8 w-8 p-0"
                   onClick={fetchBalance}
@@ -1556,7 +1601,7 @@ export default function Dashboard() {
           <CardTitle className="text-lg font-medium flex items-center justify-between">
             Recent Transactions
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               className="h-8 w-8 p-0"
               onClick={fetchRecentTransactions}
@@ -1655,9 +1700,35 @@ export default function Dashboard() {
                             ) : transactionType === 'WITHDRAW' ? (
                               'Withdrawn from wallet'
                             ) : tx.type === 'SENT' ? (
-                              `Sent to ${stripPublicKey(tx.counterparty ?? '').slice(0, 16)}...`
+                              tx.counterparty && transactionUserDetails.get(tx.counterparty) ? (
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">
+                                    {transactionUserDetails.get(tx.counterparty)?.username ? 
+                                      `Sent to @${transactionUserDetails.get(tx.counterparty)?.username}` : 
+                                      `Sent to ${transactionUserDetails.get(tx.counterparty)?.phoneNumber}`}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {stripPublicKey(tx.counterparty).slice(0, 8)}...
+                                  </span>
+                                </div>
+                              ) : (
+                                `Sent to ${stripPublicKey(tx.counterparty ?? '').slice(0, 16)}...`
+                              )
                             ) : (
-                              `Received from ${stripPublicKey(tx.counterparty ?? '').slice(0, 16)}...`
+                              tx.counterparty && transactionUserDetails.get(tx.counterparty) ? (
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">
+                                    {transactionUserDetails.get(tx.counterparty)?.username ? 
+                                      `Received from @${transactionUserDetails.get(tx.counterparty)?.username}` : 
+                                      `Received from ${transactionUserDetails.get(tx.counterparty)?.phoneNumber}`}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {stripPublicKey(tx.counterparty).slice(0, 8)}...
+                                  </span>
+                                </div>
+                              ) : (
+                                `Received from ${stripPublicKey(tx.counterparty ?? '').slice(0, 16)}...`
+                              )
                             )}
                           </div>
                         </div>
