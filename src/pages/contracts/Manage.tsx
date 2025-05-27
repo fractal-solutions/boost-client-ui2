@@ -283,14 +283,27 @@ export default function ContractsManage() {
                     <TableCell>
                       <Badge
                         variant={
-                          contract.status === 'ACTIVE'
+                          contract.status === 'ACTIVE' && contract.type === 'RECURRING_PAYMENT'
                             ? 'default'
                             : contract.status === 'PENDING'
                             ? 'secondary'
                             : 'outline'
                         }
+                        className='pb-1 mb-1'
                       >
-                        {contract.status}
+                        {contract.type === 'FIXED_PAYMENT'? 'DONE' : contract.status}
+                      </Badge>
+                      <br />
+                      <Badge
+                        variant={
+                          contract.type === 'RECURRING_PAYMENT'
+                            ? 'default'
+                            : contract.type === 'FIXED_PAYMENT'
+                            ? 'secondary'
+                            : 'outline'
+                        }
+                      >
+                        {contract.type}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
