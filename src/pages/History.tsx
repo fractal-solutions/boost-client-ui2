@@ -185,7 +185,7 @@ export default function History() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
+                    {/*<TableHead>Date</TableHead>*/}
                     <TableHead>Type</TableHead>
                     <TableHead>Details</TableHead>
                     <TableHead>Amount</TableHead>
@@ -205,9 +205,9 @@ export default function History() {
 
                     return (
                       <TableRow key={`${tx.blockHeight}-${tx.timestamp}`}>
-                        <TableCell className="whitespace-nowrap">
+                        {/*<TableCell className="whitespace-nowrap">
                           {formatDistanceToNow(tx.timestamp, { addSuffix: true })}
-                        </TableCell>
+                        </TableCell>*/}
                         <TableCell>
                           <Badge
                             variant={
@@ -219,9 +219,12 @@ export default function History() {
                                 ? 'destructive'
                                 : 'secondary'
                             }
+                            className="mb-1"
                           >
                             {transactionType}
                           </Badge>
+                          <br />
+                          {formatDistanceToNow(tx.timestamp, { addSuffix: true })}
                         </TableCell>
                         <TableCell>
                           {transactionType === 'DEPOSIT' ? (
