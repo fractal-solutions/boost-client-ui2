@@ -19,36 +19,138 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { smartcron_ip, users_ip } from '@/lib/config';
 
-const contracts = [
-  {
-    id: 1,
-    title: 'Service Agreement - Web Development',
-    client: 'Tech Solutions Ltd',
-    amount: 'KES 500,000',
-    startDate: '2024-03-01',
-    status: 'active',
-  },
-  {
-    id: 2,
-    title: 'Consulting Contract',
-    client: 'Innovation Corp',
-    amount: 'KES 250,000',
-    startDate: '2024-03-15',
-    status: 'pending',
-  },
-  {
-    id: 3,
-    title: 'Maintenance Agreement',
-    client: 'Global Systems',
-    amount: 'KES 100,000',
-    startDate: '2024-02-28',
-    status: 'completed',
-  },
-];
+interface UserDetails {
+  username?: string;
+  phoneNumber: string;
+  publicKey: string;
+}
+
+interface Contract {
+  contractId: string;
+  title: string;
+  creator: {
+    publicKey: string;
+  };
+  participants: Array<{
+    publicKey: string;
+    type: string;
+  }>;
+  amount: number;
+  startDate: number;
+  endDate: number;
+  status: 'ACTIVE' | 'PENDING' | 'COMPLETED' | 'TERMINATED';
+  type: 'RECURRING_PAYMENT' | 'FIXED_PAYMENT' | 'MILESTONE_PAYMENT';
+  nextPaymentDate?: number;
+  participantDetails?: UserDetails[];
+}
 
 export default function ContractsManage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const navigate = useNavigate();
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchUserDetails = async (publicKey: string): Promise<UserDetails | null> => {
+    try {
+      const response = await fetch(`${users_ip}/user/by-public-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicKey })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        return data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch user details:', error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const fetchContracts = async () => {
+      if (!user?.publicKey) return;
+
+      try {
+        const response = await fetch(
+          `${smartcron_ip}/contracts/user/${encodeURIComponent(user.publicKey)}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            credentials: 'include'
+          }
+        );
+
+        if (!response.ok) throw new Error('Failed to fetch contracts');
+
+        const data = await response.json();
+        
+        // Fetch user details for each contract's participants
+        const contractsWithDetails = await Promise.all(
+          data.contracts.map(async (contract: Contract) => {
+            const participantDetails = await Promise.all(
+              contract.participants.map(participant => 
+                fetchUserDetails(participant.publicKey)
+              )
+            );
+            return {
+              ...contract,
+              participantDetails: participantDetails.filter(Boolean)
+            };
+          })
+        );
+
+        setContracts(contractsWithDetails);
+      } catch (error) {
+        console.error('Failed to fetch contracts:', error);
+        toast.error('Failed to load contracts');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchContracts();
+  }, [user?.publicKey, token]);
+
+  useEffect(() => {
+    console.log('Contracts updated:', contracts);
+  }, [contracts]);
+
+  const handleDeleteContract = async (contractId: string) => {
+    try {
+      const response = await fetch(`${smartcron_ip}/contract/${contractId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) throw new Error('Failed to delete contract');
+
+      const data = await response.json();
+      if (data.success) {
+        setContracts(contracts.filter((c) => c.contractId !== contractId));
+        toast.success('Contract deleted successfully');
+      }
+    } catch (error) {
+      console.error('Failed to delete contract:', error);
+      toast.error('Failed to delete contract');
+    }
+  };
+
+  const filteredContracts = contracts.filter((contract) =>
+    contract.title?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (!user?.publicKey) {
     return (
@@ -76,6 +178,8 @@ export default function ContractsManage() {
           <Input
             placeholder="Search contracts..."
             className="pl-10"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="flex gap-2">
@@ -83,7 +187,10 @@ export default function ContractsManage() {
             <Filter className="mr-2 h-4 w-4" />
             Filter
           </Button>
-          <Button className="bg-gradient-to-r from-primary to-primary/80">
+          <Button 
+            className="bg-gradient-to-r from-primary to-primary/80"
+            onClick={() => navigate('/contracts/create')}
+          >
             New Contract
           </Button>
         </div>
@@ -108,17 +215,34 @@ export default function ContractsManage() {
               </TableHeader>
               <TableBody>
                 {contracts.map((contract) => (
-                  <TableRow key={contract.id}>
+                  <TableRow key={contract.contractId}>
                     <TableCell className="font-medium">{contract.title}</TableCell>
-                    <TableCell>{contract.client}</TableCell>
+                    <TableCell>
+                      {contract.participantDetails?.[0] ? (
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {contract.participantDetails[0].username ? 
+                              `@${contract.participantDetails[0].username}` : 
+                              contract.participantDetails[0].phoneNumber}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {contract.participantDetails[0].phoneNumber}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">
+                          {contract.creator.publicKey.slice(0, 8)}...
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>{contract.amount}</TableCell>
-                    <TableCell>{contract.startDate}</TableCell>
+                    <TableCell>{new Date(contract.startDate).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <Badge
                         variant={
-                          contract.status === 'active'
+                          contract.status === 'ACTIVE'
                             ? 'default'
-                            : contract.status === 'pending'
+                            : contract.status === 'PENDING'
                             ? 'secondary'
                             : 'outline'
                         }
@@ -129,8 +253,8 @@ export default function ContractsManage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
+                          <Button variant="secondary" size="icon" className='bg-red-400 hover:bg-red-600'>
+                            <Edit2 className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -142,7 +266,10 @@ export default function ContractsManage() {
                             <Edit2 className="mr-2 h-4 w-4" />
                             Edit Contract
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => handleDeleteContract(contract.contractId)}
+                          >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete Contract
                           </DropdownMenuItem>
