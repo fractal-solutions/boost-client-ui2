@@ -142,7 +142,7 @@ export default function Dashboard() {
     purchaseId: string;
   } | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const { socket } = useWebSocket();
+  const { socketGeneral: socket } = useWebSocket();
   const [showQuickPayBalance, setShowQuickPayBalance] = useState(false);
   const [showQuickPayInfo, setShowQuickPayInfo] = useState(false);
   const [isProcessingDeposit, setIsProcessingDeposit] = useState(false);
@@ -432,7 +432,7 @@ export default function Dashboard() {
       );
   
       // Only if transaction succeeds, notify the vendor
-      await fetch('http://localhost:2225/payment-complete', {
+      await fetch(`${users_ip}/payment-complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -455,7 +455,7 @@ export default function Dashboard() {
       
       // Notify vendor of failure if needed
       try {
-        await fetch('http://localhost:2225/payment-complete', {
+        await fetch(`${users_ip}/payment-complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
