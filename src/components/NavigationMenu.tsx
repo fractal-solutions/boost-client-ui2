@@ -191,7 +191,7 @@ export function NavigationMenuDemo() {
                       description="View your transaction history"
                     />
                     <ListItem
-                      href="/scheduled"
+                      href="contracts/manage"
                       title="Scheduled"
                       description="Manage scheduled payments"
                     />
