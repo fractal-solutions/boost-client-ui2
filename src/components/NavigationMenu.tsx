@@ -122,6 +122,33 @@ export function NavigationMenuDemo() {
     navigate('/home'); // Redirect to home after logout
   };
 
+  // Add state for install prompt
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  // Add effect to handle install prompt
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  // Add install handler
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log('Install choice:', outcome);
+    setDeferredPrompt(null);
+  };
+
   return (
     <div className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container mx-auto px-2 sm:px-4 py-2 flex justify-between items-center">
@@ -386,6 +413,16 @@ export function NavigationMenuDemo() {
                   </DropdownMenuItem>
                 </>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>App Settings</DropdownMenuLabel>
+              <DropdownMenuItem 
+                onClick={handleInstall}
+                disabled={!deferredPrompt}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Install App
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
             </DropdownMenuContent>
           </DropdownMenu>
           {/* <Bell className="h-4 w-4 cursor-pointer text-foreground" /> */}
@@ -699,4 +736,10 @@ function formatLongKey(key: string) {
     .trim();
   // Show first 8 and last 8 characters
   return `${cleanKey.slice(0, 8)}...${cleanKey.slice(-8)}`;
+}
+
+// Add TypeScript interface
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
