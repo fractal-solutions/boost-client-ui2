@@ -40,12 +40,27 @@ export default function CreditStatus() {
   const [creditData, setCreditData] = useState<CreditData | null>(null);
   
 
+  // useEffect(() => {
+  //   const storedData = localStorage.getItem('creditData');
+  //   if (storedData) {
+  //     setCreditData(JSON.parse(storedData));
+  //   }
+  // }, []);
+
   useEffect(() => {
-    const storedData = localStorage.getItem('creditData');
-    if (storedData) {
-      setCreditData(JSON.parse(storedData));
+    if (user?.publicKey) {
+      const storedDataMap = localStorage.getItem('creditDataMap');
+      if (storedDataMap) {
+        const parsedDataMap = JSON.parse(storedDataMap);
+        const userCreditData = parsedDataMap[user.publicKey];
+        if (userCreditData) {
+          setCreditData(userCreditData);
+        } else {
+          setCreditData(null);
+        }
+      }
     }
-  }, []);
+  }, [user?.publicKey]);
 
   if (!user?.publicKey) {
     return (

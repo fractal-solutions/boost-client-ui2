@@ -26,11 +26,19 @@ export default function CreditUnderwriting() {
 
   // useEffect to check localStorage for existing credit data
   useEffect(() => {
-    const creditData = localStorage.getItem('creditData');
-    if (creditData) {
-      setIsApplicationComplete(true);
+    if (user?.publicKey) {
+      const storedDataMap = localStorage.getItem('creditDataMap');
+      if (storedDataMap) {
+        const parsedDataMap = JSON.parse(storedDataMap);
+        const userCreditData = parsedDataMap[user.publicKey];
+        if (userCreditData) {
+          setIsApplicationComplete(true);
+        } else {
+          setIsApplicationComplete(false);
+        }
+      }
     }
-  }, []);
+  }, [user?.publicKey]);
 
   const [formValues, setFormValues] = useState({
     personalInfo: {
@@ -371,7 +379,7 @@ export default function CreditUnderwriting() {
         if (!response.ok) throw new Error('Upload failed');
         const responseData = await response.json();
         
-        if (responseData.success && responseData.prediction) {
+        if (responseData.success && responseData.prediction && user?.publicKey) {
           // Save prediction data to localStorage
           const creditData = {
             features: responseData.prediction.features,
@@ -381,7 +389,13 @@ export default function CreditUnderwriting() {
             lastUpdated: new Date().toISOString()
           };
           
-          localStorage.setItem('creditData', JSON.stringify(creditData));
+          // Save as an object with public keys as keys
+          const existingData = localStorage.getItem('creditDataMap');
+          const creditDataMap = existingData ? JSON.parse(existingData) : {};
+          
+          creditDataMap[user.publicKey] = creditData;
+          localStorage.setItem('creditDataMap', JSON.stringify(creditDataMap));
+        
           setUploadSuccess(true);
           setIsApplicationComplete(true); 
           toast.success('Credit assessment completed successfully');
