@@ -1,9 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowUpRight, ArrowDownRight, BrainCircuit, LineChart, AlertTriangle } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, BrainCircuit, LineChart, AlertTriangle, RefreshCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { metadata_ip } from '@/lib/config';
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface CreditData {
   features: {
@@ -36,16 +40,11 @@ interface CreditData {
 }
 
 export default function CreditStatus() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [creditData, setCreditData] = useState<CreditData | null>(null);
-  
-
-  // useEffect(() => {
-  //   const storedData = localStorage.getItem('creditData');
-  //   if (storedData) {
-  //     setCreditData(JSON.parse(storedData));
-  //   }
-  // }, []);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [totalRevenue, setTotalRevenue] = useState(0);
 
   useEffect(() => {
     if (user?.publicKey) {
@@ -61,6 +60,120 @@ export default function CreditStatus() {
       }
     }
   }, [user?.publicKey]);
+
+  useEffect(() => {
+    const fetchBalanceAndRevenue = async () => {
+      if (!user?.publicKey) return;
+
+      try {
+        // Fetch current balance
+        const balanceResponse = await fetch(`${metadata_ip}/balance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: user.publicKey })
+        });
+
+        const balanceData = await balanceResponse.json();
+        setCurrentBalance(balanceData.balance);
+
+        // Fetch transaction history
+        const historyResponse = await fetch(`${metadata_ip}/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            address: user.publicKey,
+            limit: 100
+          })
+        });
+
+        const historyData = await historyResponse.json();
+        
+        // Calculate total revenue from transactions
+        const revenue = historyData.transactions.reduce((acc: number, tx: any) => {
+          if (tx.type === 'RECEIVED' && !tx.counterparty) {
+            return acc + tx.amount;
+          }
+          return acc;
+        }, 0);
+
+        setTotalRevenue(revenue);
+      } catch (error) {
+        console.error('Failed to fetch balance and revenue:', error);
+      }
+    };
+
+    fetchBalanceAndRevenue();
+  }, [user?.publicKey]);
+
+  const handleRefresh = async () => {
+    if (!user?.publicKey) return;
+
+    try {
+      setIsRefreshing(true);
+
+      const boostBalance = currentBalance;
+      const boostRevenue = totalRevenue;
+
+      // Get existing features
+      const currentFeatures = creditData?.features;
+      if (!currentFeatures) throw new Error('No existing credit data');
+
+      // Create updated features array
+      const existingRevenue = currentFeatures.annualRevenue || 0;
+      const updatedFeatures = [
+        (existingRevenue + (boostRevenue/1000000)), // Add transaction volume to revenue
+        currentFeatures.debtToEquity,
+        currentFeatures.paymentHistory,
+        (currentFeatures.cashReserves + (boostBalance/1000000)), // Add current balance to reserves
+        currentFeatures.yearsInBusiness,
+        currentFeatures.industryRisk,
+        currentFeatures.latePayments,
+        currentFeatures.creditUtilization
+      ];
+
+      console.log('Updated Features:', updatedFeatures);
+      // Send request for credit recalculation
+      const response = await fetch('https://n8n.fractal.co.ke/webhook/95aa2d14-6aa7-44f8-9704-1e74fba96dda', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          features: updatedFeatures
+        })
+      });
+
+      const responseData = await response.json();
+
+      if (responseData.success && user?.publicKey) {
+        // Update localStorage with new credit data
+        const existingData = localStorage.getItem('creditDataMap');
+        const creditDataMap = existingData ? JSON.parse(existingData) : {};
+        
+        // Create updated credit data while preserving revenue and reserves
+        const updatedCreditData = {
+          ...responseData.prediction,
+          features: {
+            ...responseData.prediction.features,
+            annualRevenue: currentFeatures.annualRevenue, // Keep original revenue
+            cashReserves: currentFeatures.cashReserves, // Keep original reserves
+          },
+          lastUpdated: new Date().toISOString()
+        };
+
+        creditDataMap[user.publicKey] = updatedCreditData;
+        localStorage.setItem('creditDataMap', JSON.stringify(creditDataMap));
+        setCreditData(updatedCreditData);
+        toast.success('Credit score recalculated successfully');
+      }
+
+    } catch (error) {
+      console.error('Failed to refresh credit score:', error);
+      toast.error('Failed to refresh credit score');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (!user?.publicKey) {
     return (
@@ -86,11 +199,22 @@ export default function CreditStatus() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <div>Credit Score</div>
-              <Badge variant="outline" className="flex gap-1">
-                <BrainCircuit className="h-3 w-3" />
-                AI Powered
-              </Badge>
+              <div className="flex items-center gap-2">
+                <div>Credit Score</div>
+                <Badge variant="outline" className="flex gap-1">
+                  <BrainCircuit className="h-3 w-3" />
+                  AI Powered
+                </Badge>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing || !creditData}
+                className="h-8 w-8 p-0"
+              >
+                <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -131,13 +255,13 @@ export default function CreditStatus() {
                 <div className="space-y-2">
                   <div className="text-sm text-muted-foreground">Annual Revenue</div>
                   <div className="text-lg font-semibold">
-                    KES {(creditData?.features.annualRevenue || 0).toLocaleString()}M
+                    KES {((creditData?.features.annualRevenue || 0) + (totalRevenue/1000000)).toLocaleString()}M
                   </div>
                 </div>
                 <div className="space-y-2">
                   <div className="text-sm text-muted-foreground">Cash Reserves</div>
                   <div className="text-lg font-semibold">
-                    KES {(creditData?.features.cashReserves || 0).toLocaleString()}M
+                    KES {((creditData?.features.cashReserves || 0) + (currentBalance/1000000)).toLocaleString()}M
                   </div>
                 </div>
               </div>
