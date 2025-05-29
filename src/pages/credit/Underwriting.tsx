@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ClipboardList, CheckCircle, AlertCircle, Upload, Building2, UserRound, X } from "lucide-react";
+import { ClipboardList, CheckCircle, AlertCircle, Upload, Building2, UserRound, X, Badge } from "lucide-react";
 import  CreditStatus  from "./Status";
 import { useAuth } from '@/contexts/AuthContext';
+import { credit_score_ip, metadata_ip } from '@/lib/config';
+import { toast } from "sonner";
 
 export default function CreditUnderwriting() {
   const [step, setStep] = useState(1);
@@ -19,6 +21,16 @@ export default function CreditUnderwriting() {
   const [hasPassword, setHasPassword] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const { user } = useAuth();
+  const [isApplicationComplete, setIsApplicationComplete] = useState(false);
+  const completedStateClass = "opacity-50 pointer-events-none select-none";
+
+  // useEffect to check localStorage for existing credit data
+  useEffect(() => {
+    const creditData = localStorage.getItem('creditData');
+    if (creditData) {
+      setIsApplicationComplete(true);
+    }
+  }, []);
 
   const [formValues, setFormValues] = useState({
     personalInfo: {
@@ -320,24 +332,63 @@ export default function CreditUnderwriting() {
       }
 
       const formData = new FormData();
+
+      // Add document files
       formData.append('govId', govId);
       formData.append('registration', registration);
       formData.append('bankStatements', bankStatements);
+      
+      // Add bank statements password if exists
       if (hasPassword && bankStatementsPassword) {
         formData.append('bankStatementsPassword', bankStatementsPassword);
       }
 
+      // Add personal information
+      Object.entries(formValues.personalInfo).forEach(([key, value]) => {
+        formData.append(`personalInfo[${key}]`, value);
+      });
+
+      // Add business details
+      Object.entries(formValues.businessDetails).forEach(([key, value]) => {
+        formData.append(`businessDetails[${key}]`, value.toString());
+      });
+
+      // Add applicant public key
+      if (user?.publicKey) {
+        formData.append('applicantPublicKey', user.publicKey);
+      }
+
+      // Add application metadata
+      formData.append('applicationDate', new Date().toISOString());
+      formData.append('applicationProgress', progress.toString());
+
       try {
-        const response = await fetch('http://localhost:5678/webhook-test/655ed40e-d08e-4124-91f6-d82cf637ff62', {
+        const response = await fetch('https://n8n.fractal.co.ke/webhook/655ed40e-d08e-4124-91f6-d82cf637ff62', {
           method: 'POST',
           body: formData,
         });
         
         if (!response.ok) throw new Error('Upload failed');
-        alert('Documents uploaded successfully');
-        setUploadSuccess(true);
+        const responseData = await response.json();
+        
+        if (responseData.success && responseData.prediction) {
+          // Save prediction data to localStorage
+          const creditData = {
+            features: responseData.prediction.features,
+            predictions: responseData.prediction.predictions,
+            standardizedFICOScore: responseData.prediction.standardizedFICOScore,
+            thresholdsMet: responseData.prediction.thresholdsMet,
+            lastUpdated: new Date().toISOString()
+          };
+          
+          localStorage.setItem('creditData', JSON.stringify(creditData));
+          setUploadSuccess(true);
+          setIsApplicationComplete(true); 
+          toast.success('Credit assessment completed successfully');
+        }
+
       } catch (error) {
-        alert('Error uploading documents');
+        alert('Error submitting application');
         console.error(error);
         setUploadSuccess(false);
       }
@@ -547,11 +598,20 @@ export default function CreditUnderwriting() {
     <div className="space-y-6">
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
+        <Card className={isApplicationComplete ? completedStateClass : ""}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5" />
+              {isApplicationComplete ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <ClipboardList className="h-5 w-5" />
+              )}
               Application Status
+              {isApplicationComplete && (
+                <Badge variant="outline" className="ml-auto">
+                  Completed
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -651,7 +711,7 @@ export default function CreditUnderwriting() {
                       }}
                       disabled={step === totalSteps && !uploadSuccess}
                     >
-                      {step === totalSteps ? 'Submit' : 'Next'}
+                      {step === totalSteps ? 'Done' : 'Next'}
                     </Button>
                   </div>
                 </DialogContent>
@@ -660,9 +720,16 @@ export default function CreditUnderwriting() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={isApplicationComplete ? completedStateClass : ""}>
           <CardHeader>
-            <CardTitle>Required Documents</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Required Documents
+              {isApplicationComplete && (
+                <Badge variant="outline" className="ml-auto">
+                  Verified
+                </Badge>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-4">

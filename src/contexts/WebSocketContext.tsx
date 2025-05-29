@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
-import { users_ws, chain_ws } from '@/lib/config';
+import { users_ws, chain_ws, users_ip } from '@/lib/config';
 
 interface WebSocketContextType {
   socketGeneral: WebSocket | null;
@@ -24,7 +24,31 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [isConnectedTransaction, setIsConnectedTransaction] = useState(false);
   const { user } = useAuth();
 
-  
+  interface UserDetails {
+    username?: string;
+    phoneNumber: string;
+    publicKey: string;
+  }
+
+  const fetchUserDetails = async (publicKey: string): Promise<UserDetails | null> => {
+    try {
+      const response = await fetch(`${users_ip}/user/by-public-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicKey })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        return data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch user details:', error);
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (!user?.phoneNumber) return;
 
@@ -111,13 +135,34 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!socketTransaction) return;
 
-    const handleMessageTransaction = (event: MessageEvent) => {
+    const handleMessageTransaction = async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         console.log('Received Transaction WebSocket message:', data);
 
         if (data.type === 'transaction-notification') {
-          toast.success(`Transaction received: KES ${data.data.amount} from ${data.data.senderId}`);
+          // Fetch sender details
+          const senderDetails = await fetchUserDetails(data.data.senderId);
+          
+          if (senderDetails) {
+            const senderDisplay = senderDetails.username 
+              ? `@${senderDetails.username} (${senderDetails.phoneNumber})`
+              : senderDetails.phoneNumber;
+
+            toast.success(
+              <div className="flex flex-col gap-1">
+                <div className="font-medium">
+                  Transaction Received: KES {data.data.amount.toLocaleString()}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  From: {senderDisplay}
+                </div>
+              </div>
+            );
+          } else {
+            // Fallback if user details can't be fetched
+            toast.success(`Transaction received: KES ${data.data.amount.toLocaleString()}`);
+          }
         }
       } catch (error) {
         console.error('Error handling Transaction WebSocket message:', error);

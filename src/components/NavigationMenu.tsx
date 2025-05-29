@@ -29,6 +29,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
+
 export function NavigationMenuDemo() {
   const { user, isAuthenticated, login, logout, register, verifyPhone, confirmPhone } = useAuth();
   const navigate = useNavigate();
@@ -739,7 +746,3 @@ function formatLongKey(key: string) {
 }
 
 // Add TypeScript interface
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-}

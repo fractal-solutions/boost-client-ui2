@@ -306,17 +306,54 @@ export default function Dashboard() {
           setPaymentRequest(data.data);
           toast.info('New payment request received' + ': ' + JSON.stringify(data));
         }
+
+        // user details lookup for transaction notifications here
+        if (data.type === 'transaction-notification') {
+          const fetchUserDetails = async () => {
+            try {
+              const response = await fetch(`${users_ip}/user/by-public-key`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ publicKey: data.data.senderId })
+              });
+
+              const userData = await response.json();
+              if (userData.success) {
+                const senderDetails = userData.data;
+                const senderDisplay = senderDetails.username 
+                  ? `@${senderDetails.username} (${senderDetails.phoneNumber})`
+                  : senderDetails.phoneNumber;
+
+                toast.success(
+                  <div className="flex flex-col gap-1">
+                    <div className="font-medium">
+                      Transaction Received: KES {data.data.amount.toLocaleString()}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      From: {senderDisplay}
+                    </div>
+                  </div>
+                );
+              }
+            } catch (error) {
+              console.error('Error fetching sender details:', error);
+              // Fallback to basic notification if user details fetch fails
+              toast.success(`Transaction received: KES ${data.data.amount.toLocaleString()}`);
+            }
+          };
+
+          fetchUserDetails();
+        }
       } catch (error) {
         console.error('Error handling WebSocket message:', error);
       }
     };
   
     socket.addEventListener('message', handleMessage);
-  
     return () => {
       socket.removeEventListener('message', handleMessage);
     };
-  }, [socket]);
+}, [socket]);
 
   useEffect(() => {
     if (isPrivateKeyActive && privateKey) {
