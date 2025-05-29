@@ -12,12 +12,78 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { BadgeCheck } from "lucide-react";
+import { BadgeCheck, Link } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffect, useState } from 'react';
+
+interface CreditData {
+  features: {
+    annualRevenue: number;
+    cashReserves: number;
+  };
+  predictions: {
+    finalScore: string;
+    interestRate: {
+      baseRate: string;
+      finalRate: string;
+    };
+    ordinalClassification: {
+      category: string;
+      range: string;
+    };
+  };
+}
 
 export default function CreditLoans() {
   const { user } = useAuth();
+  const [creditData, setCreditData] = useState<CreditData | null>(null);
+  const [overdraftLimit, setOverdraftLimit] = useState(0);
+  const [creditLimit, setCreditLimit] = useState(0);
+  const [isEligible, setIsEligible] = useState(false);
+  const [loanAmount, setLoanAmount] = useState<number>(0);
+  const [repaymentPeriod, setRepaymentPeriod] = useState<number>(3);
+  const [monthlyPayment, setMonthlyPayment] = useState<number>(0);
+
+  useEffect(() => {
+    if (user?.publicKey) {
+      const storedDataMap = localStorage.getItem('creditDataMap');
+      if (storedDataMap) {
+        const parsedDataMap = JSON.parse(storedDataMap);
+        const userCreditData = parsedDataMap[user.publicKey];
+        if (userCreditData) {
+          setCreditData(userCreditData);
+          
+          // Check credit score eligibility (above 680)
+          const creditScore = Number(userCreditData.predictions.finalScore);
+          setIsEligible(creditScore >= 680);
+
+          // Calculate overdraft limit (1% of annual revenue)
+          const annualRevenue = userCreditData.features.annualRevenue;
+          setOverdraftLimit(annualRevenue * 0.01 * 1000000);
+
+          // Calculate credit facility limit based on credit score and revenue
+          // Standard calculation: (Credit Score / 850) * Annual Revenue * Risk Multiplier
+          const riskMultiplier = creditScore >= 750 ? 0.5 : 
+                               creditScore >= 700 ? 0.4 : 
+                               creditScore >= 680 ? 0.3 : 0.2;
+          const calculatedLimit = (creditScore / 850) * annualRevenue * riskMultiplier;
+          setCreditLimit(calculatedLimit * 1000000); 
+        }
+      }
+    }
+  }, [user?.publicKey]);
+
+  const calculateMonthlyPayment = (amount: number, months: number, interestRate: string) => {
+    // Convert interest rate from string (e.g. "22.39%") to decimal
+    const rate = parseFloat(interestRate.replace('%', '')) / 100 / 12; // monthly rate
+    
+    // PMT formula: rate * principal / (1 - (1 + rate)^-months)
+    const payment = (rate * amount) / (1 - Math.pow(1 + rate, -months));
+    
+    return Math.round(payment); // Round to nearest shilling
+  };
+
   if (!user?.publicKey) {
     return (
       <div className="container mx-auto max-w-7xl">
@@ -36,6 +102,50 @@ export default function CreditLoans() {
     );
   }
   
+  if (!creditData) {
+    return (
+      <div className="container mx-auto max-w-7xl">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <div className="space-y-4">
+              <BadgeCheck className="h-12 w-12 mx-auto text-muted-foreground" />
+              <h3 className="text-lg font-medium">Credit Assessment Required</h3>
+              <p className="text-muted-foreground">
+                Please complete your credit assessment to access loan facilities
+              </p>
+              <Link href="/credit/underwriting">
+                <a className="mt-4 align-middle">
+                  <Button>
+                    Complete Credit Assessment
+                  </Button>
+                </a>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isEligible) {
+    return (
+      <div className="container mx-auto max-w-7xl">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <div className="space-y-4">
+              <BadgeCheck className="h-12 w-12 mx-auto text-yellow-500" />
+              <h3 className="text-lg font-medium">Credit Score Too Low</h3>
+              <p className="text-muted-foreground">
+                A minimum credit score of 680 is required to access loan facilities.
+                Your current score: {creditData.predictions.finalScore}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
@@ -84,12 +194,14 @@ export default function CreditLoans() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <span className="text-sm">Available Overdraft</span>
-                          <span className="font-semibold">KES 50,000</span>
+                          <span className="font-semibold">
+                            KES {overdraftLimit.toLocaleString()}
+                          </span>
                         </div>
                         <Progress value={65} className="h-2" />
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <BadgeCheck className="h-4 w-4 text-green-500" />
-                          <span>Approved based on your credit score</span>
+                          <span>Credit Score: {creditData.predictions.finalScore}</span>
                         </div>
                       </div>
 
@@ -128,13 +240,17 @@ export default function CreditLoans() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <span className="text-sm">Credit Score</span>
-                          <span className="font-semibold text-green-500">725</span>
+                          <span className="font-semibold text-green-500">
+                            {creditData.predictions.finalScore}
+                          </span>
                         </div>
                         <div className="p-4 border rounded-lg">
                           <div className="font-medium mb-2">Available Credit</div>
-                          <div className="text-2xl font-bold">KES 500,000</div>
+                          <div className="text-2xl font-bold">
+                            KES {creditLimit.toLocaleString()}
+                          </div>
                           <div className="text-sm text-muted-foreground mt-1">
-                            Based on your business performance
+                            Interest Rate: {creditData.predictions.interestRate.finalRate}
                           </div>
                         </div>
                       </div>
@@ -144,9 +260,39 @@ export default function CreditLoans() {
                         <Input 
                           type="number" 
                           placeholder="Enter amount" 
+                          value={loanAmount || ''}
+                          onChange={(e) => {
+                            const amount = Number(e.target.value);
+                            setLoanAmount(amount);
+                            if (amount && repaymentPeriod) {
+                              setMonthlyPayment(
+                                calculateMonthlyPayment(
+                                  amount, 
+                                  repaymentPeriod, 
+                                  creditData.predictions.interestRate.finalRate
+                                )
+                              );
+                            }
+                          }}
+                          max={creditLimit}
                         />
                         <Label>Repayment Period</Label>
-                        <Select>
+                        <Select 
+                          value={repaymentPeriod.toString()}
+                          onValueChange={(value) => {
+                            const months = parseInt(value);
+                            setRepaymentPeriod(months);
+                            if (loanAmount && months) {
+                              setMonthlyPayment(
+                                calculateMonthlyPayment(
+                                  loanAmount, 
+                                  months, 
+                                  creditData.predictions.interestRate.finalRate
+                                )
+                              );
+                            }
+                          }}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select period" />
                           </SelectTrigger>
@@ -159,14 +305,29 @@ export default function CreditLoans() {
                         <div className="p-3 bg-muted rounded-lg">
                           <div className="flex justify-between text-sm">
                             <span>Monthly Payment:</span>
-                            <span className="font-medium">KES 45,000</span>
+                            <span className="font-medium">
+                              KES {monthlyPayment.toLocaleString()}
+                            </span>
                           </div>
                           <div className="flex justify-between text-sm mt-2">
                             <span>Interest Rate:</span>
-                            <span className="font-medium">14% p.a.</span>
+                            <span className="font-medium">
+                              {creditData.predictions.interestRate.finalRate}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm mt-2">
+                            <span>Total Repayment:</span>
+                            <span className="font-medium">
+                              KES {(monthlyPayment * repaymentPeriod).toLocaleString()}
+                            </span>
                           </div>
                         </div>
-                        <Button className="w-full">Apply for Loan</Button>
+                        <Button 
+                          className="w-full"
+                          disabled={!loanAmount || loanAmount > creditLimit || !monthlyPayment}
+                        >
+                          Apply for Loan
+                        </Button>
                       </div>
                     </div>
                   </DialogContent>
