@@ -16,6 +16,9 @@ import { BadgeCheck, Link } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from 'react';
+import { Textarea } from "@/components/ui/textarea";
+import { RefreshCcw, Upload } from "lucide-react";
+import { toast } from "sonner";
 
 interface CreditData {
   features: {
@@ -44,6 +47,8 @@ export default function CreditLoans() {
   const [loanAmount, setLoanAmount] = useState<number>(0);
   const [repaymentPeriod, setRepaymentPeriod] = useState<number>(3);
   const [monthlyPayment, setMonthlyPayment] = useState<number>(0);
+  const [privateKey, setPrivateKey] = useState('');
+  const [isProcessingLoan, setIsProcessingLoan] = useState(false);
 
   useEffect(() => {
     if (user?.publicKey) {
@@ -73,6 +78,44 @@ export default function CreditLoans() {
       }
     }
   }, [user?.publicKey]);
+
+  const handleLoanApplication = async () => {
+    if (!privateKey) {
+      toast.error('Please provide your private key');
+      return;
+    }
+
+    try {
+      setIsProcessingLoan(true);
+      const response = await fetch('https://n8n.fractal.co.ke/webhook/80cc7abc-19ee-468e-946f-ce4b05a2f7f2', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          publicKey: user?.publicKey,
+          privateKey: privateKey,
+          loanAmount: loanAmount,
+          repaymentPeriod: repaymentPeriod,
+          monthlyPayment: monthlyPayment,
+          interestRate: parseFloat(creditData?.predictions.interestRate.finalRate.replace('%', ''))
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to submit loan application');
+      const data = await response.json();
+
+      toast.success('Loan application submitted successfully');
+      setPrivateKey('');
+      setLoanAmount(0);
+      setMonthlyPayment(0);
+    } catch (error) {
+      console.error('Loan application error:', error);
+      toast.error('Failed to submit loan application');
+    } finally {
+      setIsProcessingLoan(false);
+    }
+  };
 
   const calculateMonthlyPayment = (amount: number, months: number, interestRate: string) => {
     // Convert interest rate from string (e.g. "22.39%") to decimal
@@ -232,10 +275,11 @@ export default function CreditLoans() {
                   <DialogTrigger asChild>
                     <Button className="w-full">Credit Facility</Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
+                  <DialogContent className="sm:max-w-[425px] h-[90vh] flex flex-col">
+                    <DialogHeader className="flex-none">
                       <DialogTitle>Credit Facility</DialogTitle>
                     </DialogHeader>
+                    <div className="flex-1 overflow-y-auto no-scrollbar pr-2">
                     <div className="grid gap-6">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -322,12 +366,63 @@ export default function CreditLoans() {
                             </span>
                           </div>
                         </div>
-                        <Button 
-                          className="w-full"
-                          disabled={!loanAmount || loanAmount > creditLimit || !monthlyPayment}
-                        >
-                          Apply for Loan
-                        </Button>
+                        <div className="space-y-4">
+                          <div className="border-t pt-4">
+                            <h4 className="text-sm font-medium mb-2">Private Key</h4>
+                            <div className="space-y-4">
+                              <Textarea
+                                placeholder="Enter your private key"
+                                value={privateKey}
+                                onChange={(e) => setPrivateKey(e.target.value)}
+                                className="font-mono text-xs min-h-[100px]"
+                              />
+                              <div className="relative">
+                                <Input
+                                  type="file"
+                                  accept=".txt"
+                                  className="hidden"
+                                  id="key-file"
+                                  onChange={async (e) => {
+                                    try {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      
+                                      const text = await file.text();
+                                      setPrivateKey(text.trim());
+                                      toast.success('Private key loaded successfully');
+                                    } catch (error: any) {
+                                      toast.error('Failed to load private key file');
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  variant="outline"
+                                  className="w-full"
+                                  onClick={() => document.getElementById('key-file')?.click()}
+                                >
+                                  <Upload className="mr-2 h-4 w-4" />
+                                  Upload Key File
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <Button 
+                            className="w-full"
+                            disabled={!loanAmount || loanAmount > creditLimit || !monthlyPayment || !privateKey || isProcessingLoan}
+                            onClick={handleLoanApplication}
+                          >
+                            {isProcessingLoan ? (
+                              <>
+                                <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              'Apply for Loan'
+                            )}
+                          </Button>
+                        </div>
+                      </div>
                       </div>
                     </div>
                   </DialogContent>

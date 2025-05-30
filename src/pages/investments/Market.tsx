@@ -55,34 +55,44 @@ export default function InvestmentsMarket() {
   const [filterType, setFilterType] = useState('all');
 
   // Fetch pools on mount
-  useEffect(() => {
-    const fetchPools = async () => {
-      setIsLoading(true);
-      try {
-        console.log('Fetching pools from:', `${invest_ip}/pools/active`);
-        const response = await fetch(`${invest_ip}/pools/active`);
-        console.log('Response status:', response.status);
+useEffect(() => {
+  const fetchPools = async () => {
+    setIsLoading(true);
+    try {
+      console.log('Fetching pools from:', `${invest_ip}/pools/active`);
+      const response = await fetch(`${invest_ip}/pools/active`);
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) throw new Error('Failed to fetch pools');
+      
+      const data = await response.json();
+      console.log('Received pools data:', data);
+      
+      if (data.success) {
+        // Validate, sanitize and filter pool data
+        const sanitizedPools = data.pools
+          .map((pool: Pool) => ({
+            ...pool,
+            totalSupply: Number(pool.totalSupply) || 0,
+            currentAmount: Number(pool.currentAmount) || 0,
+            threshold: Number(pool.threshold) || 0,
+            interestRate: Number(pool.interestRate) || 0
+          }))
+          .filter((pool: Pool) => pool.totalSupply > 0); // Filter out pools with zero supply
         
-        if (!response.ok) throw new Error('Failed to fetch pools');
-        
-        const data = await response.json();
-        console.log('Received pools data:', data);
-        
-        if (data.success) {
-          setPools(data.pools);
-          console.log('Set pools:', data.pools.length, 'pools');
-        } else {
-          console.error('Failed to fetch pools:', data.error);
-        }
-      } catch (error) {
-        console.error('Failed to fetch pools:', error);
-      } finally {
-        setIsLoading(false);
+        setPools(sanitizedPools);
+      } else {
+        console.error('Failed to fetch pools:', data.error);
       }
-    };
+    } catch (error) {
+      console.error('Failed to fetch pools:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    fetchPools();
-  }, []);
+  fetchPools();
+}, []);
 
   const handleInvest = async (poolId: string) => {
     if (!user?.publicKey || !token) {
@@ -172,7 +182,7 @@ export default function InvestmentsMarket() {
                   </div>
                   <Badge className="bg-green-500/10 text-green-500">
                     <TrendingUp className="mr-1 h-4 w-4" />
-                    {(pool.interestRate * 100).toFixed(1)}% APR
+                    {((pool.interestRate ?? 0) ).toFixed(1)}% APR
                   </Badge>
                 </div>
               </CardHeader>
@@ -184,7 +194,9 @@ export default function InvestmentsMarket() {
                       <div className="w-4 h-20 bg-gray-200 rounded-full overflow-hidden rotate-180">
                         <div
                           className="w-full bg-blue-500 rounded-full"
-                          style={{ height: `${(pool.currentAmount / pool.totalSupply) * 100}%` }}
+                          style={{ 
+                            height: `${((pool.currentAmount ?? 0) / (pool.totalSupply || 1) * 100)}%` 
+                          }}
                         />
                       </div>
                     </div>
@@ -193,7 +205,9 @@ export default function InvestmentsMarket() {
                       <div className="w-4 h-20 bg-gray-200 rounded-full overflow-hidden rotate-180">
                         <div
                           className="w-full bg-green-500 rounded-full"
-                          style={{ height: `${(pool.threshold / pool.totalSupply) * 100}%` }}
+                          style={{ 
+                            height: `${((pool.threshold ?? 0) / (pool.totalSupply || 1) * 100)}%` 
+                          }}
                         />
                       </div>
                     </div>
