@@ -101,13 +101,14 @@ useEffect(() => {
     }
 
     try {
-      const response = await fetch(`${invest_ip}/pool/${poolId}/invest`, {
+      const response = await fetch(`https://n8n.fractal.co.ke/webhook/4088c187-0b4e-4634-8423-645906a51c44`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          poolId: poolId,
           publicKey: user.publicKey,
           amount: Number(amount)
         })
