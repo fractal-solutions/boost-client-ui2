@@ -218,11 +218,11 @@ useEffect(() => {
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Total Supply</span>
-                        <span>KES {pool.totalSupply.toLocaleString()}</span>
+                        <span>KES {pool.totalSupply?.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Current Amount</span>
-                        <span>KES {pool.currentAmount.toLocaleString()}</span>
+                        <span>KES {pool.currentAmount?.toLocaleString()}</span>
                       </div>
                     </div>
                     <Button 
